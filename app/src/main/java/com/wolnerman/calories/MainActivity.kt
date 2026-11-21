@@ -63,10 +63,6 @@ private fun today(): String = LocalDate.now().toString()
 private fun nowTime(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
 private fun fmt(d: Double): String = if (d % 1.0 == 0.0) d.toInt().toString() else String.format(Locale.FRENCH, "%.1f", d).replace(',', '.')
 private fun g1(d: Double): String = String.format(Locale.FRENCH, "%.1f", d)
-private fun parseNum(s: String): Double? = s.trim().replace(',', '.').toDoubleOrNull()
-private fun fold(s: String): String =
-    Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase(Locale.FRENCH)
-        .replace("œ", "oe")
 
 private fun prettyDate(iso: String): String {
     val d = LocalDate.parse(iso)
@@ -206,6 +202,8 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
     var fermented by remember { mutableStateOf(false) }
     var prebiotic by remember { mutableStateOf(false) }
     fun fillNutr(m: Map<String, Double>) { nutrTxt.clear(); m.forEach { (k, v) -> nutrTxt[k] = fmt(v) } }
+    // Nom de l'aliment intégré dont les valeurs ont été copiées automatiquement (null = saisie manuelle / scan)
+    var autoFrom by remember { mutableStateOf<String?>(null) }
     var expanded by remember { mutableStateOf(false) }
     var barcode by remember { mutableStateOf("") }
     var scanned by remember { mutableStateOf<ScannedProduct?>(null) }
@@ -252,6 +250,7 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     prot100 = r.product.proteins?.let { fmt(it) } ?: ""
                     fat100 = r.product.fat?.let { fmt(it) } ?: ""
                     fillNutr(r.product.nutr); fermented = r.product.fermented; prebiotic = r.product.prebiotic
+                    autoFrom = null
                     if (r.product.kcalPer100g == null) scanMsg = "Calories non renseignées pour ce produit : saisis les kcal/100 g (voir l'étiquette)."
                 }
                 is LookupResult.Error -> scanMsg = r.message
@@ -274,24 +273,47 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
             }
     }
 
-    val suggestions = remember(name) {
-        val q = fold(name.trim())
-        if (q.isEmpty()) BUILTIN_FOODS else BUILTIN_FOODS.filter { fold(it.name).contains(q) }
+    // Nom de l'aliment intégré dont les valeurs ont été copiées automatiquement (null = saisie manuelle / scan)
+    fun fillFood(f: Food) {
+        kcal100 = f.kcalPer100g.toString()
+        carbs100 = fmt(f.carbs); prot100 = fmt(f.proteins); fat100 = fmt(f.fat)
+        fillNutr(f.nutrients); fermented = f.fermented; prebiotic = f.prebiotic
+        autoFrom = f.name
     }
+    fun clearAuto() {
+        kcal100 = ""; carbs100 = ""; prot100 = ""; fat100 = ""; nutrTxt.clear()
+        fermented = false; prebiotic = false; autoFrom = null
+    }
+    /** Saisie du nom : remplit automatiquement si le texte correspond à un aliment intégré. */
+    fun onNameChange(newName: String) {
+        name = newName
+        val manual = autoFrom == null && (kcal100.isNotBlank() || scanned != null)
+        if (manual) return // ne jamais écraser des valeurs tapées à la main ou venant d'un scan
+        val m = findFood(newName)
+        if (m != null) { if (m.name != autoFrom) fillFood(m) } else if (autoFrom != null) clearAuto()
+    }
+
+    val suggestions = remember(name) { suggestFoods(name) }
     val g = parseNum(grams)
     val k = parseNum(kcal100)
-    val computed = if (g != null && k != null) Math.round(g * k / 100.0).toInt() else null
-    val valid = name.isNotBlank() && g != null && g > 0 && k != null && k >= 0
+    val calc = calculate(g, k, parseNum(carbs100), parseNum(prot100), parseNum(fat100))
+    val problem: String? = when {
+        name.isBlank() -> "Saisis ou choisis un aliment."
+        k == null -> "Aliment inconnu : saisis les kcal pour 100 g ou scanne le code-barres."
+        g == null || g <= 0 -> "Indique la quantité en grammes."
+        else -> null
+    }
+    val valid = problem == null && calc != null
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Ajouter un aliment", style = MaterialTheme.typography.titleMedium)
+            Button(onClick = { startScan() }, enabled = !loading, modifier = Modifier.fillMaxWidth()) { Text("📷 Scanner un code-barres") }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { startScan() }, enabled = !loading) { Text("📷 Scanner") }
                 OutlinedTextField(barcode, { barcode = it.filter(Char::isDigit).take(14) },
-                    label = { Text("Code-barres") }, singleLine = true,
+                    label = { Text("Code-barres (saisie)", maxLines = 1) }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
-                TextButton(onClick = { lookup(barcode) }, enabled = !loading && barcode.length >= 8) { Text("OK") }
+                OutlinedButton(onClick = { lookup(barcode) }, enabled = !loading && barcode.length >= 8) { Text("Chercher") }
             }
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             scanMsg?.let { Text(it, color = Color(0xFFC62828), style = MaterialTheme.typography.bodySmall) }
@@ -312,7 +334,7 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
             ExposedDropdownMenuBox(expanded = expanded && suggestions.isNotEmpty(), onExpandedChange = { expanded = it }) {
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { name = it; expanded = true },
+                    onValueChange = { onNameChange(it); expanded = true },
                     label = { Text("Aliment (liste ou saisie libre)") },
                     singleLine = true,
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
@@ -323,9 +345,9 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                         DropdownMenuItem(
                             text = { Text("${f.name}  ·  ${f.kcalPer100g} kcal/100 g") },
                             onClick = {
-                                name = f.name; kcal100 = f.kcalPer100g.toString()
-                                carbs100 = fmt(f.carbs); prot100 = fmt(f.proteins); fat100 = fmt(f.fat)
-                                fillNutr(f.nutrients); fermented = f.fermented; prebiotic = f.prebiotic
+                                // Choix explicite : remplace toujours les valeurs
+                                scanned = null
+                                name = f.name; fillFood(f)
                                 expanded = false
                             }
                         )
@@ -333,19 +355,38 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(grams, { grams = it }, label = { Text("Quantité (g)") }, singleLine = true,
+                OutlinedTextField(grams, { grams = it.take(6) }, label = { Text("Quantité g", maxLines = 1) }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
-                OutlinedTextField(kcal100, { kcal100 = it }, label = { Text("kcal / 100 g") }, singleLine = true,
+                OutlinedTextField(kcal100, { kcal100 = it.take(6); autoFrom = null }, label = { Text("kcal/100 g", maxLines = 1) }, singleLine = true,
+                    isError = name.isNotBlank() && k == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
             }
-            Text("Macros pour 100 g (facultatif)", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+            autoFrom?.let { Text("Valeurs de la liste : $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+            Text("Pour 100 g (facultatif) : G = glucides, P = protéines, L = lipides", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(carbs100, { carbs100 = it.take(6) }, label = { Text("Glucides g") }, singleLine = true,
+                OutlinedTextField(carbs100, { carbs100 = it.take(6); autoFrom = null }, label = { Text("G (g)", maxLines = 1) }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
-                OutlinedTextField(prot100, { prot100 = it.take(6) }, label = { Text("Protéines g") }, singleLine = true,
+                OutlinedTextField(prot100, { prot100 = it.take(6); autoFrom = null }, label = { Text("P (g)", maxLines = 1) }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
-                OutlinedTextField(fat100, { fat100 = it.take(6) }, label = { Text("Lipides g") }, singleLine = true,
+                OutlinedTextField(fat100, { fat100 = it.take(6); autoFrom = null }, label = { Text("L (g)", maxLines = 1) }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
+            }
+            // Aperçu en direct
+            Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(10.dp)) {
+                    if (calc != null) {
+                        val parts = buildList {
+                            add("= ${calc.kcal} kcal")
+                            calc.carbs?.let { add("G ${g1(it)} g") }
+                            calc.proteins?.let { add("P ${g1(it)} g") }
+                            calc.fat?.let { add("L ${g1(it)} g") }
+                        }
+                        Text(parts.joinToString(" · "), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    } else {
+                        Text("= — kcal", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+                    problem?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Color(0xFFC62828)) }
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = fermented, onCheckedChange = { fermented = it })
@@ -362,7 +403,7 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         pair.forEach { n ->
                             OutlinedTextField(nutrTxt[n.key] ?: "", { nutrTxt[n.key] = it.take(8) },
-                                label = { Text("${n.label} (${n.unit})") }, singleLine = true,
+                                label = { Text("${n.short} ${n.unit}", maxLines = 1) }, singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
                         }
                     }
@@ -384,15 +425,16 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (computed != null) "= $computed kcal" else "= — kcal",
-                    style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Text(if (calc != null) "= ${calc.kcal} kcal" else (problem ?: ""),
+                    style = if (calc != null) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodySmall,
+                    color = if (calc != null) Color.Unspecified else Color(0xFFC62828), modifier = Modifier.weight(1f))
                 Button(enabled = valid, onClick = {
                     onAdd(Entry(System.currentTimeMillis(), today(), nowTime(), name.trim(), g!!, k!!, photoPath,
                         parseNum(carbs100)?.takeIf { it >= 0 }, parseNum(prot100)?.takeIf { it >= 0 }, parseNum(fat100)?.takeIf { it >= 0 },
                         nutr = nutrTxt.mapNotNull { (k, v) -> parseNum(v)?.takeIf { it >= 0 }?.let { k to it } }.toMap(),
                         fermented = fermented, prebiotic = prebiotic))
                     photoPath = null
-                    name = ""; grams = "100"; kcal100 = ""; carbs100 = ""; prot100 = ""; fat100 = ""; nutrTxt.clear(); fermented = false; prebiotic = false; barcode = ""; scanned = null; scanMsg = null
+                    name = ""; grams = "100"; kcal100 = ""; carbs100 = ""; prot100 = ""; fat100 = ""; nutrTxt.clear(); fermented = false; prebiotic = false; barcode = ""; scanned = null; scanMsg = null; autoFrom = null
                 }) { Text("Ajouter") }
             }
         }

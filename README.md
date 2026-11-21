@@ -1,6 +1,6 @@
 # Calories — calculateur de calories Android
 
-Version actuelle : **1.1** (versionCode 2). Historique : 1.0 → première version ; 1.1 → ajout du suivi des prébiotiques.
+Version actuelle : **1.2** (versionCode 3). Historique : 1.0 → première version ; 1.1 → suivi des prébiotiques ; 1.2 → correction du calcul des calories (remplissage automatique), aperçu en direct, 29 aliments en plus (dont plats et produits des Antilles), mise en page corrigée.
 
 Application Android simple, **hors ligne et sans compte**, pour noter ce que tu manges et suivre tes calories de la journée.
 
@@ -8,7 +8,9 @@ Application Android simple, **hors ligne et sans compte**, pour noter ce que tu 
 
 1. **Ajouter un aliment ou un repas**
    - Nom de l'aliment, quantité en grammes, kcal pour 100 g → calcul automatique : `kcal = grammes × kcal/100g ÷ 100`.
-   - Liste intégrée de 50 aliments courants (riz cuit, pain, banane, poulet, œuf, pomme… dont 8 aliments fermentés et 11 riches en prébiotiques), avec kcal, macros et nutriments approximatifs, avec **autocomplétion** (la recherche ignore les accents).
+   - Liste intégrée de 79 aliments (riz blanc / complet, pâtes, pain, banane, poulet, œuf… et produits des Antilles : igname, banane plantain, christophine, fruit à pain, dachine/madère, morue, accras, goyave, coco, pois d'Angole, colombo… dont 8 fermentés et 12 riches en prébiotiques), avec kcal, macros et nutriments approximatifs, avec **autocomplétion** (la recherche ignore les accents).
+   - **Remplissage automatique (v1.2)** : dès que le nom tapé correspond à un aliment de la liste (sans tenir compte des majuscules ni des accents ; nom exact en priorité, puis début de nom, puis mot contenu), les kcal, macros, nutriments et cases pro/prébiotiques se remplissent tout seuls, sans devoir toucher la suggestion. La ligne « Valeurs de la liste : … » indique l'aliment reconnu. Des valeurs tapées à la main ou venant d'un scan ne sont jamais écrasées.
+   - **Aperçu en direct** : `= X kcal · G y g · P z g · L w g` pendant la saisie. Si l'aliment est inconnu et les kcal/100 g vides, message « Aliment inconnu : saisis les kcal pour 100 g ou scanne le code-barres » et le bouton Ajouter reste désactivé (plus d'ajout silencieux à 0 kcal).
    - **Saisie libre** possible pour n'importe quel aliment (tu tapes toi-même les kcal/100 g, lisibles sur l'étiquette).
 2. **Total du jour** avec **objectif journalier** (2000 kcal par défaut, modifiable via le bouton « Objectif ») et **barre de progression** (rouge si dépassé).
 3. **Historique** : entrées regroupées par jour (Aujourd'hui, Hier, puis dates), total par jour, **suppression** d'une entrée (icône corbeille + confirmation).
@@ -52,7 +54,7 @@ Les valeurs caloriques sont approximatives et l'objectif suggéré n'est pas un 
 2. Ouvre-le depuis l'appli **Mes fichiers** (ou la notification de téléchargement).
 3. Si Android bloque : **Paramètres → Applications → (navigateur ou Mes fichiers) → Installer des applis inconnues → Autoriser**.
 4. Appuie sur **Installer**. Si Play Protect affiche un avertissement (appli non publiée sur le Play Store), choisis « Installer quand même ».
-5. **Mise à jour 1.0 → 1.1** : installe simplement `Calories-v1.1.apk` par-dessus, sans désinstaller. Même signature, donc tes données sont conservées.
+5. **Mise à jour** : installe simplement le nouvel APK (ex. `Calories-v1.2.apk`) par-dessus, sans désinstaller. Même signature, donc tes données sont conservées.
 6. Les mises à jour futures seront signées avec la même clé : elles s'installeront par-dessus sans perdre tes données.
 
 ## Structure du projet
@@ -67,6 +69,7 @@ calorie-app/
         ├── AndroidManifest.xml
         ├── java/com/wolnerman/calories/
         │   ├── MainActivity.kt      ← interface Jetpack Compose (Aujourd'hui, Historique, Nutriments, Profil)
+        │   ├── FoodMatch.kt         ← recherche d'aliment (accents, partiel) et calcul kcal/macros
         │   ├── Foods.kt             ← liste intégrée d'aliments, nutriments, repères journaliers
         │   └── Storage.kt           ← stockage local, profil, calcul Mifflin-St Jeor
         └── res/                     ← icône, nom de l'appli, xml/file_paths.xml (FileProvider)
@@ -74,6 +77,8 @@ calorie-app/
 
 Technique : Kotlin, Jetpack Compose (Material 3), minSdk 24 (Android 7), targetSdk 34, AGP 8.5.2, Kotlin 1.9.24, JDK 17.
 Package : `com.wolnerman.calories`.
+
+Tests unitaires (JVM) : `app/src/test/java/com/wolnerman/calories/FoodMatchTest.kt`, lancés avec `./gradlew testReleaseUnitTest`.
 
 ## Recompiler
 
@@ -87,7 +92,7 @@ export ANDROID_HOME=/home/box/android-sdk
 $ANDROID_HOME/build-tools/34.0.0/apksigner verify --verbose app/build/outputs/apk/release/app-release.apk
 ```
 
-Note : avec minSdk 24, Gradle ne signe qu'en v2 (suffisant pour Android 7+). Les APK livrés (`Calories-v1.0.apk`, `Calories-v1.1.apk`) ont été re-signés avec `apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true` pour inclure aussi v1 et v3.
+Note : avec minSdk 24, Gradle ne signe qu'en v2 (suffisant pour Android 7+). Les APK livrés (`Calories-v1.0.apk`, `Calories-v1.1.apk`, `Calories-v1.2.apk`) ont été re-signés avec `apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true` pour inclure aussi v1 et v3.
 
 La signature lit `/home/box/android-keys/keystore.properties` (ou le chemin dans la variable `CALORIES_KEYSTORE_PROPS`).
 **Garde le keystore et son mot de passe en sécurité** : sans eux, impossible de publier une mise à jour qui s'installe par-dessus l'appli existante. Ils ne doivent jamais être mis sur GitHub (déjà exclus par `.gitignore`).

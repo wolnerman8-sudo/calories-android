@@ -37,7 +37,7 @@ sealed class LookupResult {
 
 /** Recherche d'un produit par code-barres sur Open Food Facts (API v2). */
 object OpenFoodFacts {
-    private const val UA = "Calories-Android/1.1 (wolnerman)"
+    private const val UA = "Calories-Android/1.2 (wolnerman)"
 
     suspend fun lookup(barcodeRaw: String): LookupResult = withContext(Dispatchers.IO) {
         val barcode = barcodeRaw.filter(Char::isDigit)

@@ -57,6 +57,11 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onDestroy() {
+        if (isFinishing) ScaleManager.shutdown()
+        super.onDestroy()
+    }
 }
 
 private fun today(): String = LocalDate.now().toString()
@@ -361,6 +366,7 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     isError = name.isNotBlank() && k == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
             }
+            ScalePanel(onUse = { w -> grams = fmt(Math.round(w * 10.0) / 10.0) })
             autoFrom?.let { Text("Valeurs de la liste : $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
             Text("Pour 100 g (facultatif) : G = glucides, P = protéines, L = lipides", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

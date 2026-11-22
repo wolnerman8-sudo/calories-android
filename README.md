@@ -48,6 +48,14 @@ Les valeurs caloriques sont approximatives et l'objectif suggéré n'est pas un 
     - Carte « Prébiotiques » dans Nutriments : jours sur 7 avec au moins un aliment prébiotique, ligne **Synergie** (jours avec à la fois un probiotique et un prébiotique), suggestion douce si 0 à 2 jours, fiche d'info (inuline, FOS, GOS, amidon résistant ; sources ; féculents cuits puis refroidis ; augmenter progressivement ; prudence FODMAP en cas de SII ; pas un avis médical).
     - Icônes dans les listes : 🦠 = fermenté/probiotique, 🌱 = prébiotique.
 
+## Balance Bluetooth AiLink (v1.3)
+
+Bouton « ⚖️ Connecter la balance » dans « Ajouter un aliment » : recherche Bluetooth LE d'une balance de cuisine AiLink/Elink
+(service FFE0, notifications FFE2, poignée de main sur FFE3), affichage du poids en direct avec indicateur « stable »,
+bouton « Utiliser ce poids » (conversion en grammes), tare, remplissage automatique optionnel et journal technique
+(trames brutes en hexadécimal, copiable). Poignée de main et déchiffrement A7 : bibliothèque officielle
+`com.github.elinkthings:AILinkSecretAndroid` (JitPack). Décodage dans `ScaleProtocol.kt`, testé dans `ScaleDecoderTest.kt`.
+
 ## Installer sur ton Samsung (APK)
 
 1. Télécharge `Calories-v1.0.apk` sur le téléphone.

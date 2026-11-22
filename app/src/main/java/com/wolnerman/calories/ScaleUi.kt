@@ -159,12 +159,12 @@ private fun DebugPanel(mgr: ScaleManager) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("Appareil : ${mgr.deviceName ?: "—"}  MAC : ${mgr.deviceMac ?: "—"}", style = mono)
         Text("Pilote : ${mgr.driverLabel ?: "—"}", style = mono)
-        Text("Version appli : 1.4 · chiffrement AiLink : ${AiLinkCrypto.error?.let { "ERREUR $it" } ?: "ok"}", style = mono)
+        Text("Version appli : 1.5 · chiffrement AiLink : ${AiLinkCrypto.error?.let { "ERREUR $it" } ?: "ok"}", style = mono)
         if (mgr.gattServices.isNotEmpty()) Text("Services : " + mgr.gattServices.joinToString("  "), style = mono)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = {
                 val text = buildString {
-                    appendLine("Calories 1.4 — journal balance")
+                    appendLine("Calories 1.5 — journal balance")
                     appendLine("Appareil : ${mgr.deviceName} ${mgr.deviceMac} · pilote : ${mgr.driverLabel}")
                     appendLine("Services : ${mgr.gattServices.joinToString("  ")}")
                     mgr.found.forEach { appendLine("Trouvé : ${it.name} ${it.address} type=${it.driver?.id ?: "inconnu"} services=${it.adv.services} ${it.rawHex}") }

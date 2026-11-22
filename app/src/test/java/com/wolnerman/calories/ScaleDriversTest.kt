@@ -101,22 +101,72 @@ class ScaleDriversTest {
     }
 
     // ---------- AiLink via l'architecture de pilotes
+    private class AiSession(override val advMacLE: ByteArray?, override val address: String) : DriverSession {
+        val writes = mutableListOf<Pair<String, ByteArray>>()
+        val logs = mutableListOf<String>()
+        override fun write(charUuid: String, data: ByteArray) { writes += charUuid to data }
+        override fun log(s: String) { logs += s }
+        override val cryptMac = address
+    }
+    private val handshakeOnly = object : AiLinkCryptoApi {
+        override fun handshakeStart() = b(0xA6, 0x11, 0x23)
+        override fun handshakeAnswer(fromBle: ByteArray) = b(0xA6, 0x11, 0x24)
+        override fun xorPayload(cid: Int, payload: ByteArray, mac: String): ByteArray? = null
+    }
+    private fun weightPayload(seq: Int, raw: Int, stable: Boolean = false, neg: Boolean = false) =
+        b(0x01, seq, raw shr 16, (raw shr 8) and 0xFF, raw and 0xFF, 0x00, 0x00, if (neg) 1 else 0, if (stable) 2 else 1)
+
     @Test fun ailinkPilote() {
-        val key = b(0x5A, 0xC3)
-        val crypto = object : AiLinkCryptoApi {
-            override fun handshakeStart() = b(0xA6, 0x11, 0x23)
-            override fun handshakeAnswer(fromBle: ByteArray) = b(0xA6, 0x11, 0x24)
-            override fun xorPayload(cid: Int, payload: ByteArray, mac: String) = ByteArray(payload.size) { (payload[it].toInt() xor key[it % 2].toInt()).toByte() }
-        }
-        val drv = AiLinkDriver(crypto, 0x34)
-        val s = FakeSession()
+        val macLE = b(0xA4, 0x2C, 0x33, 0x44, 0x55, 0x66)          // annonce : MAC 66:55:44:33:2C:A4
+        val s = AiSession(macLE, "66:55:44:33:2C:A4")
+        val drv = AiLinkDriver(handshakeOnly, 0x34)
         drv.onReady(s); assertEquals("FFE3", s.writes.last().first)
         assertTrue(drv.onNotify("FFE3", b(0xA6, 0x11, 0x23, 1, 2), s).isEmpty()); assertEquals(0x24, s.writes.last().second[2].toInt())
-        val plain = b(0x01, 0x05, 0x00, 0x04, 0xD2, 0x00, 0x01, 0x00, 0x02)
-        val frame = ScaleDecoder.buildA7(0x34, crypto.xorPayload(0x34, plain, ""))
-        val r = drv.onNotify("FFE2", frame, s).single()
-        assertEquals(123.4, r.value, 1e-9); assertTrue(r.stable); assertEquals(123.4, r.grams!!, 1e-9)
+        val got = mutableListOf<WeightReading>()
+        for (i in 0 until 8) got += drv.onNotify("FFE2", ScaleDecoder.buildA7(0x34, AiLinkCipher.xor(0x34, macLE, weightPayload(i, 1234, stable = true))), s)
+        assertTrue(got.isNotEmpty())
+        assertTrue(got.all { kotlin.math.abs(it.value - 1234.0) < 1e-9 && it.stable })
+        assertTrue(s.logs.any { it.contains("Clé retenue") })
         assertTrue(drv.tare(s)); assertEquals("FFE1", s.writes.last().first)
+        // la tare est chiffrée avec la clé retenue
+        val tareFrame = s.writes.last().second
+        assertEquals("04 01", ScaleDecoder.hex(AiLinkCipher.xor(0x34, macLE, tareFrame.copyOfRange(4, 6))))
+    }
+
+    /** Cas du terrain (v1.4) : une mauvaise clé donne « -1024 g » ; la bonne doit gagner et -1024 ne doit jamais sortir. */
+    @Test fun ailinkMauvaiseCleNeGagnePas() {
+        val trueLE = b(0xA4, 0x2C, 0x33, 0x44, 0x55, 0x66)
+        val wrongLE = trueLE.copyOf().also { it[1] = (it[1].toInt() xor 0x01).toByte(); it[3] = (it[3].toInt() xor 0x04).toByte() }
+        // vérifie qu'on reproduit bien le symptôme avec la mauvaise clé
+        val enc0 = AiLinkCipher.xor(0x34, trueLE, weightPayload(0, 0))
+        assertEquals(-1024.0, ScaleDecoder.decodeWeight(AiLinkCipher.xor(0x34, wrongLE, enc0))!!.value, 1e-9)
+        // annonce = mauvaise clé, adresse Android = bonne
+        val s = AiSession(wrongLE, AiLinkCipher.macStr(trueLE.reversedArray()))
+        val drv = AiLinkDriver(handshakeOnly, 0x34)
+        drv.onReady(s)
+        val got = mutableListOf<WeightReading>()
+        for (i in 0 until 10) got += drv.onNotify("FFE2", ScaleDecoder.buildA7(0x34, AiLinkCipher.xor(0x34, trueLE, weightPayload(i / 2, 0))), s)
+        assertTrue(got.isNotEmpty())
+        assertTrue(got.all { it.value == 0.0 })
+        assertTrue(s.logs.any { it.contains("Clé retenue : adresse Android") })
+    }
+
+    @Test fun ailinkTrameEnClair() {
+        val s = AiSession(b(1, 2, 3, 4, 5, 6), "06:05:04:03:02:01")
+        val drv = AiLinkDriver(handshakeOnly, 0x34)
+        val got = mutableListOf<WeightReading>()
+        for (i in 0 until 8) got += drv.onNotify("FFE2", ScaleDecoder.buildA7(0x34, weightPayload(i, 2500)), s)
+        assertTrue(got.isNotEmpty()); assertTrue(got.all { it.value == 2500.0 })
+    }
+
+    @Test fun cipherAiLink() {
+        // CID 0x0034 → octets (0x01, 0x34) car 0x00 devient 0x01 ; mac petit-boutiste 11 22 33 44 55 66
+        val mac = b(0x11, 0x22, 0x33, 0x44, 0x55, 0x66)
+        val out = AiLinkCipher.xor(0x34, mac, ByteArray(8))
+        assertEquals("10 16 32 70 54 52 10 16", ScaleDecoder.hex(out))
+        val p = b(1, 2, 3, 4, 5, 6, 7, 8, 9)
+        assertArrayEquals(p, AiLinkCipher.xor(0x34, mac, AiLinkCipher.xor(0x34, mac, p)))
+        assertEquals("AA:0B:CC:DD:EE:FF", AiLinkCipher.macStr(AiLinkCipher.macBytes("aa:0b:cc:dd:ee:ff")!!))
     }
 
     @Test fun piloteInconnuNeDecodeRien() {

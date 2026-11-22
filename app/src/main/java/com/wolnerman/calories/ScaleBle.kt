@@ -79,6 +79,8 @@ class ScaleManager(private val ctx: Context) {
     private var lastChange = 0L
     private val loggedAdv = HashSet<String>()
     private val TOKEN = Any()
+    private var appTared = false
+    private var rejected = 0
 
     private val tf = SimpleDateFormat("HH:mm:ss.SSS", Locale.FRANCE)
     fun addLog(s: String) = main.post {
@@ -99,6 +101,8 @@ class ScaleManager(private val ctx: Context) {
         }
         override fun log(s: String) { addLog(s) }
         override val cryptMac: String get() = target?.adv?.aiLink?.mac ?: target?.address ?: ""
+        override val advMacLE: ByteArray? get() = target?.adv?.aiLink?.macLittleEndian
+        override val address: String get() = target?.address ?: ""
     }
 
     // ---------- Scan ----------
@@ -152,7 +156,7 @@ class ScaleManager(private val ctx: Context) {
         scanning = true
         status = ScaleStatus.SCANNING
         message = "Recherche des balances… Allume ta balance (appuie sur une touche) et garde-la près du téléphone."
-        addLog("Début du scan (Android ${Build.VERSION.SDK_INT}, Calories 1.4)")
+        addLog("Début du scan (Android ${Build.VERSION.SDK_INT}, Calories 1.5)")
         try {
             scanner.startScan(null, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), scanCb)
         } catch (t: Throwable) { scanning = false; fail("Impossible de lancer la recherche : ${t.message}"); return }
@@ -186,7 +190,7 @@ class ScaleManager(private val ctx: Context) {
         driverInfo = d.driver; driverLabel = d.driver?.label ?: "Détection après connexion…"
         status = ScaleStatus.CONNECTING
         message = "Connexion à ${deviceName}…"
-        reading = null; lastValue = null; canTare = false
+        reading = null; lastValue = null; canTare = false; appTared = false; rejected = 0
         addLog("Connexion à ${d.name} ${d.address} (pilote annonce : ${d.driver?.id ?: "aucun"})")
         gatt = dev.connectGatt(ctx, false, gattCb, BluetoothDevice.TRANSPORT_LE)
         main.postDelayed({ if (status == ScaleStatus.CONNECTING) { addLog("Délai de connexion dépassé"); disconnect(true); fail("L'appareil ne répond pas. Rallume-le et réessaie.") } }, 20_000)
@@ -206,7 +210,7 @@ class ScaleManager(private val ctx: Context) {
 
     fun tare() {
         val d = driver ?: return
-        if (!d.tare(session)) addLog("Tare non disponible pour cette balance")
+        if (!d.tare(session)) addLog("Tare non disponible pour cette balance") else appTared = true
     }
 
     // ---------- File d'opérations GATT ----------
@@ -342,7 +346,24 @@ class ScaleManager(private val ctx: Context) {
         }
     }
 
-    private fun onReading(r: WeightReading) {
+    /** Filtre de vraisemblance : rien au-delà de la capacité, pas de négatif sauf après une tare depuis l'appli. */
+    private fun plausible(r: WeightReading): WeightReading? {
+        val g = r.grams ?: return r
+        val max = if (driverInfo?.kitchen == true) 10_500.0 else 300_000.0
+        val why = when {
+            kotlin.math.abs(g) > max -> "hors capacité"
+            g < 0 && g > -3 -> return r.copy(value = 0.0, grams = 0.0)   // petit bruit autour de zéro
+            g < 0 && !appTared -> "négatif sans tare depuis l'appli"
+            else -> null
+        }
+        if (why == null) { rejected = 0; return r }
+        addLog("   valeur rejetée (${r.value} ${r.unitLabel} : $why)")
+        if (++rejected == 5) message = "La balance envoie des valeurs incohérentes. Active « Journal technique », copie-le et envoie-le-moi."
+        return null
+    }
+
+    private fun onReading(raw: WeightReading) {
+        val r = plausible(raw) ?: return
         val now = System.currentTimeMillis()
         if (lastValue != r.value) { lastValue = r.value; lastChange = now }
         // Si la balance n'envoie pas d'indicateur « stable », on le déduit : même valeur depuis 1,5 s.

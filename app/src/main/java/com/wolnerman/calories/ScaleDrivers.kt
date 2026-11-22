@@ -36,6 +36,10 @@ interface DriverSession {
     fun log(s: String)
     /** MAC à utiliser pour le chiffrement AiLink (annonce si disponible, sinon adresse Android). */
     val cryptMac: String
+    /** MAC lu dans l'annonce AiLink, dans l'ordre des octets reçus (petit-boutiste), ou null. */
+    val advMacLE: ByteArray? get() = null
+    /** Adresse Bluetooth vue par Android ("AA:BB:CC:DD:EE:FF"). */
+    val address: String get() = cryptMac
 }
 
 /** Chiffrement AiLink (implémenté par la bibliothèque officielle ; remplaçable dans les tests). */
@@ -132,14 +136,30 @@ private fun xorAll(b: ByteArray, from: Int, toEx: Int): Int { var x = 0; for (i 
 private fun bytes(vararg x: Int) = ByteArray(x.size) { x[it].toByte() }
 
 // ---------------------------------------------------------------- AiLink
-/** AiLink / Elink : FFE0, poignée de main A6 sur FFE3, trames A7 chiffrées sur FFE2 (voir ScaleProtocol.kt). */
+/**
+ * AiLink / Elink : FFE0, poignée de main A6 sur FFE3 (bibliothèque officielle), trames A7 sur FFE2.
+ * v1.5 : déchiffrement XOR en Kotlin (voir AiLinkCipher) avec choix automatique de la clé (AiLinkKeyPicker),
+ * et journal détaillé (brut, clair et champs pour chaque hypothèse).
+ */
 class AiLinkDriver(private val crypto: AiLinkCryptoApi?, private var cid: Int) : ScaleDriver() {
     override val subscribe = listOf("FFE2", "FFE3")
     init { if (cid == 0) cid = AiLinkProtocol.CID_NUTRITION }
+    private var picker: AiLinkKeyPicker? = null
+    private var announcedLock = false
+
+    private fun picker(s: DriverSession): AiLinkKeyPicker = picker ?: run {
+        val c = mutableListOf<Pair<String, ByteArray?>>()
+        s.advMacLE?.let { c += "MAC annonce" to it; c += "MAC annonce inversé" to it.reversedArray() }
+        AiLinkCipher.macBytes(s.address)?.let { c += "adresse Android" to it.reversedArray(); c += "adresse Android inversée" to it }
+        c += "sans chiffrement" to null
+        s.log("Hypothèses de clé : " + c.joinToString(" | ") { (l, m) -> "$l=${m?.let { ScaleDecoder.hex(it) } ?: "—"}" })
+        AiLinkKeyPicker(c).also { picker = it }
+    }
 
     override fun onReady(s: DriverSession) {
+        picker(s)
         val hs = crypto?.handshakeStart()
-        if (hs == null) s.log("Chiffrement AiLink indisponible : pas de poignée de main")
+        if (hs == null) s.log("Bibliothèque AiLink indisponible : pas de poignée de main")
         else { s.log("→ Poignée de main FFE3 : ${ScaleDecoder.hex(hs)}"); s.write("FFE3", hs) }
     }
 
@@ -151,22 +171,34 @@ class AiLinkDriver(private val crypto: AiLinkCryptoApi?, private var cid: Int) :
                 if (ans != null) { s.log("→ Réponse poignée de main : ${ScaleDecoder.hex(ans)}"); s.write("FFE3", ans) }
                 else s.log("Impossible de répondre à la poignée de main")
             } else if (a6 == AiLinkProtocol.GET_HANDSHAKE) s.log("Poignée de main acceptée par la balance")
+            else s.log("A6 type=%02X (info module BLE)".format(a6))
             return emptyList()
         }
-        val dec: ((Int, ByteArray) -> ByteArray?)? = crypto?.let { c -> { cidIn, p -> c.xorPayload(cidIn, p, s.cryptMac) } }
-        val res = ScaleDecoder.decodeNotification(data, dec)
-        res.forEach { (f, r) ->
+        val pk = picker(s)
+        val frames = ScaleDecoder.splitA7(data)
+        if (frames.isEmpty()) { s.log("Trame non reconnue (ni A6 ni A7)"); return emptyList() }
+        val out = mutableListOf<WeightReading>()
+        for (f in frames) {
             if (f.cid != 0) cid = f.cid
-            val clear = if (f.checksumOk) dec?.invoke(f.cid, f.payload.copyOf()) else null
-            s.log("A7 CID=%04X somme=%s clair=%s → %s".format(f.cid, if (f.checksumOk) "ok" else "FAUX", ScaleDecoder.hex(clear),
-                r?.let { "${it.value} ${it.unitLabel}${if (it.stable) " stable" else ""}" } ?: "pas un poids"))
+            s.log("A7 CID=%04X long=%d somme=%s payload chiffré=%s".format(f.cid, f.payload.size, if (f.checksumOk) "ok" else "FAUSSE", ScaleDecoder.hex(f.payload)))
+            if (!f.checksumOk) { s.log("   trame ignorée (somme de contrôle fausse)"); continue }
+            val evals = pk.evaluate(f.cid, f.payload)
+            evals.forEach { e ->
+                s.log("   [%s] clair=%s | %s → %s (score %+d = %d)".format(e.cand.label, ScaleDecoder.hex(e.clear), e.fields ?: "trop court",
+                    e.reading?.let { "${it.value} ${it.unitLabel}${if (it.stable) " stable" else ""}" } ?: "pas un poids valide", e.delta, e.cand.score))
+            }
+            val best = pk.best()
+            if (pk.locked != null && !announcedLock) { announcedLock = true; s.log("✔ Clé retenue : ${pk.locked!!.label}") }
+            if (best == null) { s.log("   (clé pas encore déterminée : aucune valeur affichée)"); continue }
+            evals.firstOrNull { it.cand === best }?.reading?.let { out += it.toWeight() }
         }
-        return res.mapNotNull { it.second?.toWeight() }
+        return out
     }
 
     override fun tare(s: DriverSession): Boolean {
-        val plain = bytes(AiLinkProtocol.TYPE_ZERO, 0x01)
-        val enc = crypto?.xorPayload(cid, plain.copyOf(), s.cryptMac) ?: plain
+        val plain = byteArrayOf(AiLinkProtocol.TYPE_ZERO.toByte(), 0x01)
+        val key = picker?.best()
+        val enc = key?.let { picker!!.clear(it, cid, plain) } ?: crypto?.xorPayload(cid, plain.copyOf(), s.cryptMac) ?: plain
         s.write("FFE1", ScaleDecoder.buildA7(cid, enc))
         return true
     }

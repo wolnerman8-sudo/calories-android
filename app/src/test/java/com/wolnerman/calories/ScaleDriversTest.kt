@@ -151,6 +151,21 @@ class ScaleDriversTest {
         assertTrue(s.logs.any { it.contains("Clé retenue : adresse Android") })
     }
 
+
+    /** Données réelles du FS5H_2ca4 : adresse Android 01:BA:01:0C:2C:A4. Si la vraie clé est l'adresse (petit-boutiste) et que l'annonce diffère, v1.5 choisit l'adresse. */
+    @Test fun fs5hAdresseReelle() {
+        val addr = "01:BA:01:0C:2C:A4"
+        val trueLE = AiLinkCipher.macBytes(addr)!!.reversedArray()                // A4 2C 0C 01 BA 01
+        val advLE = trueLE.copyOf().also { it[1] = (it[1].toInt() xor 0x01).toByte(); it[3] = (it[3].toInt() xor 0x04).toByte() }
+        val s = AiSession(advLE, addr)
+        val drv = AiLinkDriver(handshakeOnly, 0x34)
+        drv.onReady(s)
+        val got = mutableListOf<WeightReading>()
+        for (i in 0 until 10) got += drv.onNotify("FFE2", ScaleDecoder.buildA7(0x34, AiLinkCipher.xor(0x34, trueLE, weightPayload(i, 0))), s)
+        assertTrue(got.isNotEmpty() && got.all { it.value == 0.0 })
+        assertTrue(s.logs.any { it.contains("Clé retenue : adresse Android") })
+    }
+
     @Test fun ailinkTrameEnClair() {
         val s = AiSession(b(1, 2, 3, 4, 5, 6), "06:05:04:03:02:01")
         val drv = AiLinkDriver(handshakeOnly, 0x34)

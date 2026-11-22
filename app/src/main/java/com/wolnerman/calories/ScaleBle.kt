@@ -9,6 +9,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -17,40 +18,38 @@ import com.elinkthings.ailinksecretlib.AiLinkBleCheckUtil
 import java.text.SimpleDateFormat
 import java.util.*
 
-/** Accès à la bibliothèque officielle AILinkSecretAndroid (MIT, elinkthings) pour la poignée de main et le XOR A7. */
-object AiLinkCrypto {
+/** Bibliothèque officielle AILinkSecretAndroid (elinkthings) : poignée de main et XOR A7. */
+object AiLinkCrypto : AiLinkCryptoApi {
     @Volatile private var broken: String? = null
     val error: String? get() = broken
-
     private inline fun <T> safe(block: () -> T): T? = try { block() } catch (t: Throwable) { broken = t.toString(); null }
 
-    fun handshakeStart(): ByteArray? = safe {
+    override fun handshakeStart(): ByteArray? = safe {
         AiLinkBleCheckUtil.sendHandshakeFormat(AiLinkBleCheckUtil.getRandomKey(16), AiLinkProtocol.SET_HANDSHAKE.toByte())
     }
-
-    /** Réponse à la demande de poignée de main envoyée par le module BLE (A6 type 0x23). */
-    fun handshakeAnswer(fromBle: ByteArray): ByteArray? = safe {
+    override fun handshakeAnswer(fromBle: ByteArray): ByteArray? = safe {
         val p = AiLinkBleCheckUtil.returnHandshakeDataFormat(fromBle) ?: return@safe null
         val enc = AiLinkBleCheckUtil.bleEncrypt(p) ?: return@safe null
         AiLinkBleCheckUtil.sendHandshakeFormat(enc, AiLinkProtocol.GET_HANDSHAKE.toByte())
     }
-
-    /** Chiffrement/déchiffrement (symétrique) d'un payload A7. mac = "AA:BB:CC:DD:EE:FF". */
-    fun xorPayload(cid: Int, payload: ByteArray, mac: String): ByteArray? = safe {
+    override fun xorPayload(cid: Int, payload: ByteArray, mac: String): ByteArray? = safe {
         AiLinkBleCheckUtil.mcuEncrypt(byteArrayOf((cid shr 8).toByte(), cid.toByte()), payload, mac)
     }
 }
 
 data class FoundDevice(
-    val address: String, val name: String?, val rssi: Int, val aiLink: Boolean,
-    val adv: AiLinkAdv?, val services: List<String>, val rawHex: String,
-)
+    val address: String, val name: String?, val rssi: Int,
+    val driver: ScaleDriverInfo?, val adv: AdvData, val rawHex: String,
+) {
+    val known: Boolean get() = driver != null
+    val typeLabel: String get() = driver?.label ?: "Type inconnu"
+}
 
 enum class ScaleStatus { IDLE, SCANNING, CONNECTING, CONNECTED, ERROR }
 
 /**
- * Gestion Bluetooth LE de la balance AiLink. Toutes les mises à jour d'état se font sur le thread principal.
- * Les autorisations sont demandées par l'interface avant d'appeler [startScan] / [connect].
+ * Gestion Bluetooth LE générique : scan, connexion, abonnements, file GATT. Le décodage est délégué au pilote.
+ * Toutes les mises à jour d'état se font sur le thread principal.
  */
 @SuppressLint("MissingPermission")
 class ScaleManager(private val ctx: Context) {
@@ -59,16 +58,19 @@ class ScaleManager(private val ctx: Context) {
 
     var status by mutableStateOf(ScaleStatus.IDLE); private set
     var message by mutableStateOf<String?>(null); private set
-    var reading by mutableStateOf<ScaleReading?>(null); private set
+    var reading by mutableStateOf<WeightReading?>(null); private set
     var deviceName by mutableStateOf<String?>(null); private set
     var deviceMac by mutableStateOf<String?>(null); private set
+    var driverLabel by mutableStateOf<String?>(null); private set
+    var canTare by mutableStateOf(false); private set
     var gattServices by mutableStateOf<List<String>>(emptyList()); private set
     val found = mutableStateListOf<FoundDevice>()
     val log = mutableStateListOf<String>()
 
     private var gatt: BluetoothGatt? = null
-    private var cryptMac: String? = null
-    private var cid: Int = AiLinkProtocol.CID_NUTRITION
+    private var driver: ScaleDriver? = null
+    private var driverInfo: ScaleDriverInfo? = null
+    private var target: FoundDevice? = null
     private var scanning = false
     private var autoConnect = true
     private val ops = ArrayDeque<() -> Boolean>()
@@ -76,15 +78,28 @@ class ScaleManager(private val ctx: Context) {
     private var lastValue: Double? = null
     private var lastChange = 0L
     private val loggedAdv = HashSet<String>()
+    private val TOKEN = Any()
 
     private val tf = SimpleDateFormat("HH:mm:ss.SSS", Locale.FRANCE)
     fun addLog(s: String) = main.post {
         log.add("${tf.format(Date())}  $s")
-        while (log.size > 400) log.removeAt(0)
+        while (log.size > 500) log.removeAt(0)
     }
 
     fun isBluetoothOn(): Boolean = adapter?.isEnabled == true
     fun hasBle(): Boolean = ctx.packageManager.hasSystemFeature("android.hardware.bluetooth_le") && adapter != null
+
+    private val session = object : DriverSession {
+        override fun write(charUuid: String, data: ByteArray) {
+            val g = gatt ?: return
+            val ch = findChar(g, charUuid)
+            if (ch == null) { addLog("Écriture impossible : caractéristique $charUuid absente"); return }
+            addLog("→ ${ScaleDrivers.short(ch.uuid.toString())} : ${ScaleDecoder.hex(data)}")
+            enqueue { write(g, ch, data) }
+        }
+        override fun log(s: String) { addLog(s) }
+        override val cryptMac: String get() = target?.adv?.aiLink?.mac ?: target?.address ?: ""
+    }
 
     // ---------- Scan ----------
     private val scanCb = object : ScanCallback() {
@@ -99,27 +114,23 @@ class ScaleManager(private val ctx: Context) {
     private fun onResult(r: ScanResult) {
         val bytes = r.scanRecord?.bytes
         val name = r.scanRecord?.deviceName ?: runCatching { r.device.name }.getOrNull()
-        val ai = ScaleDecoder.looksLikeAiLink(name, bytes)
-        val adv = ScaleDecoder.parseAdv(bytes)
-        val services = ScaleDecoder.advServices16(bytes)
-        val trimmed = bytes?.let { trimAdv(it) }
-        val d = FoundDevice(r.device.address, name, r.rssi, ai, adv, services, ScaleDecoder.hex(trimmed))
+        val adv = AdvData(name, ScaleDecoder.advServices16(bytes), ScaleDecoder.parseAdv(bytes))
+        val drv = ScaleDrivers.detect(adv)
+        val d = FoundDevice(r.device.address, name, r.rssi, drv, adv, ScaleDecoder.hex(bytes?.let { trimAdv(it) }))
         main.post {
             if (!scanning) return@post
             val idx = found.indexOfFirst { it.address == d.address }
-            if (idx >= 0) found[idx] = d else if (ai || name != null) found.add(d)
-            if (ai) {
-                val key = d.address + d.rawHex
-                if (loggedAdv.add(key) && loggedAdv.size < 200) {
-                    addLog("Annonce ${d.name ?: "?"} ${d.address} rssi=${d.rssi} services=${services.joinToString(",")} " +
-                        (adv?.let { "CID=%04X VID=%04X PID=%04X MAC=%s ".format(it.cid, it.vid, it.pid, it.mac) } ?: "") + "data=${d.rawHex}")
-                    if ("F0A0" in services) addLog("→ Balance de type « diffusion » (F0A0) : les poids sont dans les annonces (format non décodé, envoie-moi ce journal).")
-                }
-                // Connexion automatique au premier appareil qui s'annonce clairement comme AiLink (FFE0 ou en-tête « In »)
-                if (autoConnect && (adv != null || "FFE0" in services) && "F0A0" !in services) {
-                    autoConnect = false
-                    connect(d)
-                }
+            if (idx >= 0) found[idx] = d else if (found.size < 80) found.add(d)
+            val key = d.address + d.rawHex
+            if ((drv != null || name != null) && loggedAdv.add(key) && loggedAdv.size < 300) {
+                addLog("Annonce ${d.name ?: "?"} ${d.address} rssi=${d.rssi} type=${drv?.id ?: "inconnu"} services=${adv.services.joinToString(",")} " +
+                    (adv.aiLink?.let { "CID=%04X VID=%04X PID=%04X MAC=%s ".format(it.cid, it.vid, it.pid, it.mac) } ?: "") + "data=${d.rawHex}")
+                if (drv == ScaleDrivers.AILINK && adv.has("F0A0")) addLog("→ Balance AiLink « diffusion » (F0A0) : poids dans les annonces, format non décodé.")
+            }
+            // Connexion automatique uniquement pour une balance de cuisine reconnue avec certitude
+            if (autoConnect && drv != null && drv.kitchen && drv.detect(adv) >= 85 && !adv.has("F0A0")) {
+                autoConnect = false
+                connect(d)
             }
         }
     }
@@ -140,8 +151,8 @@ class ScaleManager(private val ctx: Context) {
         autoConnect = auto
         scanning = true
         status = ScaleStatus.SCANNING
-        message = "Recherche de la balance… Allume-la (appuie sur une touche) et garde-la près du téléphone."
-        addLog("Début du scan (Android ${Build.VERSION.SDK_INT})")
+        message = "Recherche des balances… Allume ta balance (appuie sur une touche) et garde-la près du téléphone."
+        addLog("Début du scan (Android ${Build.VERSION.SDK_INT}, Calories 1.4)")
         try {
             scanner.startScan(null, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), scanCb)
         } catch (t: Throwable) { scanning = false; fail("Impossible de lancer la recherche : ${t.message}"); return }
@@ -150,8 +161,8 @@ class ScaleManager(private val ctx: Context) {
                 stopScan()
                 if (status == ScaleStatus.SCANNING) {
                     status = ScaleStatus.IDLE
-                    message = if (found.none { it.aiLink }) "Aucune balance trouvée. Allume-la, ferme l'appli AiLink (elle garde la balance connectée), puis réessaie." +
-                        (if (Build.VERSION.SDK_INT < 31) " Vérifie aussi que la localisation est activée." else "")
+                    message = if (found.none { it.known }) "Aucune balance reconnue. Tu peux toucher un appareil de la liste pour l'essayer, ou rallumer la balance et relancer. Ferme aussi l'appli du fabricant (elle garde la balance connectée)." +
+                        (if (Build.VERSION.SDK_INT < 31) " Vérifie que la localisation est activée." else "")
                     else "Touche ta balance dans la liste pour la connecter."
                 }
             }
@@ -170,22 +181,22 @@ class ScaleManager(private val ctx: Context) {
         stopScan()
         disconnect(silent = true)
         val dev = runCatching { adapter?.getRemoteDevice(d.address) }.getOrNull() ?: run { fail("Appareil introuvable."); return }
-        deviceName = d.name ?: "Balance"; deviceMac = d.address
-        cryptMac = d.adv?.mac ?: d.address
-        cid = d.adv?.cid?.takeIf { it != 0 } ?: AiLinkProtocol.CID_NUTRITION
+        target = d
+        deviceName = d.name ?: "Appareil"; deviceMac = d.address
+        driverInfo = d.driver; driverLabel = d.driver?.label ?: "Détection après connexion…"
         status = ScaleStatus.CONNECTING
         message = "Connexion à ${deviceName}…"
-        reading = null; lastValue = null
-        addLog("Connexion à ${d.name} ${d.address} (MAC chiffrement=$cryptMac, CID=%04X)".format(cid))
-        gatt = if (Build.VERSION.SDK_INT >= 23) dev.connectGatt(ctx, false, gattCb, BluetoothDevice.TRANSPORT_LE) else dev.connectGatt(ctx, false, gattCb)
-        main.postDelayed({ if (status == ScaleStatus.CONNECTING) { addLog("Délai de connexion dépassé"); disconnect(true); fail("La balance ne répond pas. Rallume-la et réessaie.") } }, 20_000)
+        reading = null; lastValue = null; canTare = false
+        addLog("Connexion à ${d.name} ${d.address} (pilote annonce : ${d.driver?.id ?: "aucun"})")
+        gatt = dev.connectGatt(ctx, false, gattCb, BluetoothDevice.TRANSPORT_LE)
+        main.postDelayed({ if (status == ScaleStatus.CONNECTING) { addLog("Délai de connexion dépassé"); disconnect(true); fail("L'appareil ne répond pas. Rallume-le et réessaie.") } }, 20_000)
     }
 
     fun disconnect(silent: Boolean = false) {
-        main.removeCallbacksAndMessages(HS_TOKEN)
+        main.removeCallbacksAndMessages(TOKEN)
         ops.clear(); opBusy = false
         gatt?.let { g -> runCatching { g.disconnect() }; runCatching { g.close() } }
-        gatt = null
+        gatt = null; driver = null
         if (!silent) { status = ScaleStatus.IDLE; message = "Balance déconnectée."; addLog("Déconnexion demandée") }
     }
 
@@ -193,17 +204,9 @@ class ScaleManager(private val ctx: Context) {
 
     private fun fail(msg: String) { status = ScaleStatus.ERROR; message = msg; addLog("Erreur : $msg") }
 
-    /** Remise à zéro / tare (A7 type 0x04). */
     fun tare() {
-        val g = gatt ?: return
-        val ch = g.getService(UUID.fromString(AiLinkProtocol.SERVICE))?.getCharacteristic(UUID.fromString(AiLinkProtocol.CHAR_WRITE)) ?: run {
-            addLog("Tare impossible : caractéristique FFE1 absente"); return
-        }
-        val plain = byteArrayOf(AiLinkProtocol.TYPE_ZERO.toByte(), 0x01)
-        val enc = AiLinkCrypto.xorPayload(cid, plain.copyOf(), cryptMac ?: "") ?: plain
-        val frame = ScaleDecoder.buildA7(cid, enc)
-        addLog("→ Tare FFE1 : ${ScaleDecoder.hex(frame)}")
-        enqueue { write(g, ch, frame) }
+        val d = driver ?: return
+        if (!d.tare(session)) addLog("Tare non disponible pour cette balance")
     }
 
     // ---------- File d'opérations GATT ----------
@@ -217,6 +220,12 @@ class ScaleManager(private val ctx: Context) {
     }
     private fun opDone() = main.post { opBusy = false; next() }
 
+    private fun findChar(g: BluetoothGatt, u: String): BluetoothGattCharacteristic? {
+        val want = ScaleDrivers.short(u)
+        for (s in g.services) for (c in s.characteristics) if (ScaleDrivers.short(c.uuid.toString()) == want) return c
+        return null
+    }
+
     @Suppress("DEPRECATION")
     private fun write(g: BluetoothGatt, ch: BluetoothGattCharacteristic, v: ByteArray): Boolean {
         val type = if (ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0)
@@ -229,12 +238,23 @@ class ScaleManager(private val ctx: Context) {
     private fun enableNotify(g: BluetoothGatt, ch: BluetoothGattCharacteristic): Boolean {
         g.setCharacteristicNotification(ch, true)
         val d = ch.getDescriptor(UUID.fromString(AiLinkProtocol.CCCD)) ?: return false
-        val v = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+        val v = if (ch.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                else BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
         return if (Build.VERSION.SDK_INT >= 33) g.writeDescriptor(d, v) == BluetoothStatusCodes.SUCCESS
         else { d.value = v; g.writeDescriptor(d) }
     }
 
-    private val HS_TOKEN = Any()
+    private fun canNotify(c: BluetoothGattCharacteristic) =
+        c.properties and (BluetoothGattCharacteristic.PROPERTY_NOTIFY or BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0
+
+    private fun scheduleHeartbeat(g: BluetoothGatt, d: ScaleDriver) {
+        val hb = d.heartbeat ?: return
+        val ch = d.heartbeatChar ?: return
+        if (d.heartbeatMs <= 0) return
+        main.postAtTime({
+            if (gatt === g && driver === d) { findChar(g, ch)?.let { c -> enqueue { write(g, c, hb) } }; scheduleHeartbeat(g, d) }
+        }, TOKEN, SystemClock.uptimeMillis() + d.heartbeatMs)
+    }
 
     private val gattCb = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, st: Int, newState: Int) {
@@ -245,11 +265,12 @@ class ScaleManager(private val ctx: Context) {
             } else {
                 main.post {
                     if (gatt === g) {
-                        runCatching { g.close() }; gatt = null; ops.clear(); opBusy = false
+                        runCatching { g.close() }; gatt = null; driver = null; ops.clear(); opBusy = false
+                        main.removeCallbacksAndMessages(TOKEN)
                         val was = status
                         status = ScaleStatus.ERROR
-                        message = if (was == ScaleStatus.CONNECTED) "La balance s'est déconnectée (mise en veille ?). Touche « Connecter la balance » pour reprendre."
-                        else "Connexion impossible (code $st). Ferme l'appli AiLink, rallume la balance et réessaie."
+                        message = if (was == ScaleStatus.CONNECTED) "La balance s'est déconnectée (mise en veille ?). Touche « Connecter une balance » pour reprendre."
+                        else "Connexion impossible (code $st). Ferme l'appli du fabricant, rallume la balance et réessaie."
                     }
                 }
             }
@@ -258,86 +279,78 @@ class ScaleManager(private val ctx: Context) {
         override fun onServicesDiscovered(g: BluetoothGatt, st: Int) {
             val list = g.services.map { s -> "${short(s.uuid)} [" + s.characteristics.joinToString(",") { short(it.uuid) + props(it.properties) } + "]" }
             addLog("Services : ${list.joinToString("  ")}")
-            main.post { gattServices = list }
-            val svc = g.getService(UUID.fromString(AiLinkProtocol.SERVICE))
-            if (svc == null) {
-                main.post { fail("Ce n'est pas une balance AiLink compatible (service FFE0 absent). Envoie-moi une capture du journal.") }
-                return
-            }
-            val notify = svc.getCharacteristic(UUID.fromString(AiLinkProtocol.CHAR_NOTIFY))
-            val wn = svc.getCharacteristic(UUID.fromString(AiLinkProtocol.CHAR_WRITE_NOTIFY))
-            notify?.let { c -> enqueue { enableNotify(g, c) } }
-            wn?.let { c -> enqueue { enableNotify(g, c) } }
-            if (wn != null) {
-                enqueue {
-                    val hs = AiLinkCrypto.handshakeStart()
-                    if (hs == null) { addLog("Bibliothèque de chiffrement indisponible : ${AiLinkCrypto.error}"); false }
-                    else { addLog("→ Poignée de main FFE3 : ${ScaleDecoder.hex(hs)}"); write(g, wn, hs) }
-                }
-            }
+            val svcIds = g.services.map { it.uuid.toString() }
             main.post {
+                if (gatt !== g) return@post
+                gattServices = list
+                // Le pilote de l'annonce doit trouver son service ; sinon on redétecte d'après les services réels.
+                var info = driverInfo
+                val ids = svcIds.map { ScaleDrivers.short(it) }.toSet()
+                if (info == null || info.serviceHints.none { it in ids }) {
+                    val byGatt = ScaleDrivers.detectByServices(svcIds, deviceName)
+                    if (byGatt != info) addLog("Pilote d'après les services : ${byGatt?.id ?: "inconnu"}")
+                    info = byGatt
+                }
+                val inf = info ?: ScaleDrivers.UNKNOWN
+                driverInfo = inf; driverLabel = inf.label
+                val cid = target?.adv?.aiLink?.cid ?: 0
+                val d = inf.create(AiLinkCrypto, cid)
+                driver = d
+                val chars = if (d.subscribe.isEmpty())
+                    g.services.filter { short(it.uuid) !in setOf("1800", "1801") }.flatMap { it.characteristics }.filter { canNotify(it) }
+                else d.subscribe.mapNotNull { u -> findChar(g, u)?.takeIf { canNotify(it) } ?: run { addLog("Caractéristique $u absente"); null } }
+                chars.forEach { c -> enqueue { enableNotify(g, c) } }
+                main.post { if (driver === d) d.onReady(session) }
+                scheduleHeartbeat(g, d)
                 status = ScaleStatus.CONNECTED
-                message = "Balance connectée. Pose l'aliment sur le plateau."
+                canTare = inf != ScaleDrivers.UNKNOWN && inf != ScaleDrivers.SIG_WEIGHT && inf != ScaleDrivers.SIG_BODY
+                message = if (inf == ScaleDrivers.UNKNOWN) "Connecté, mais ce modèle n'est pas encore pris en charge : ses données sont enregistrées dans le journal technique. Envoie-moi une capture."
+                          else "Balance connectée (${inf.label}). Pose l'aliment sur le plateau."
+                main.postAtTime({ if (reading == null && gatt === g && inf != ScaleDrivers.UNKNOWN) addLog("Aucun poids reçu après 6 s : appuie sur une touche de la balance ou pose un objet.") },
+                    TOKEN, SystemClock.uptimeMillis() + 6000)
             }
-            main.postAtTime({ if (reading == null && gatt === g) addLog("Aucun poids reçu après 6 s : appuie sur une touche de la balance ou pose un objet.") },
-                HS_TOKEN, android.os.SystemClock.uptimeMillis() + 6000)
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, st: Int) {
-            addLog("Notifications ${short(d.characteristic.uuid)} activées (status=$st)"); opDone()
+            addLog("Abonnement ${short(d.characteristic.uuid)} (status=$st)"); opDone()
         }
 
         override fun onCharacteristicWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, st: Int) {
-            addLog("Écriture ${short(c.uuid)} status=$st"); opDone()
+            if (st != BluetoothGatt.GATT_SUCCESS) addLog("Écriture ${short(c.uuid)} status=$st")
+            opDone()
         }
 
         @Deprecated("API < 33")
         @Suppress("DEPRECATION")
         override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic) {
-            if (Build.VERSION.SDK_INT < 33) onData(g, c, c.value ?: return)
+            if (Build.VERSION.SDK_INT < 33) onData(c, c.value ?: return)
         }
 
-        override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic, value: ByteArray) {
-            onData(g, c, value)
-        }
+        override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic, value: ByteArray) = onData(c, value)
     }
 
-    private fun onData(g: BluetoothGatt, c: BluetoothGattCharacteristic, v: ByteArray) {
+    private fun onData(c: BluetoothGattCharacteristic, v: ByteArray) {
         val id = short(c.uuid)
-        val a6 = ScaleDecoder.a6Type(v)
-        if (a6 != null) {
-            addLog("← $id A6 type=%02X : %s".format(a6, ScaleDecoder.hex(v)))
-            if (a6 == AiLinkProtocol.SET_HANDSHAKE) {
-                val ans = AiLinkCrypto.handshakeAnswer(v)
-                val wn = g.getService(UUID.fromString(AiLinkProtocol.SERVICE))?.getCharacteristic(UUID.fromString(AiLinkProtocol.CHAR_WRITE_NOTIFY))
-                if (ans != null && wn != null) { addLog("→ Réponse poignée de main : ${ScaleDecoder.hex(ans)}"); enqueue { write(g, wn, ans) } }
-                else addLog("Impossible de répondre à la poignée de main : ${AiLinkCrypto.error}")
-            } else if (a6 == AiLinkProtocol.GET_HANDSHAKE) addLog("Poignée de main acceptée par la balance")
-            return
-        }
-        val results = ScaleDecoder.decodeNotification(v) { cidIn, p -> AiLinkCrypto.xorPayload(cidIn, p, cryptMac ?: "") }
-        if (results.isEmpty()) { addLog("← $id (non reconnu) : ${ScaleDecoder.hex(v)}"); return }
-        for ((f, r) in results) {
-            val clear = if (f.checksumOk) AiLinkCrypto.xorPayload(f.cid, f.payload.copyOf(), cryptMac ?: "") else null
-            addLog("← $id A7 CID=%04X somme=%s brut=%s clair=%s → %s".format(f.cid, if (f.checksumOk) "ok" else "FAUX",
-                ScaleDecoder.hex(v), ScaleDecoder.hex(clear), r?.let { "${it.value} ${it.unitLabel}${if (it.stable) " stable" else ""}" } ?: "pas un poids"))
-            if (r != null) main.post { onReading(r) }
+        addLog("← $id : ${ScaleDecoder.hex(v)}")
+        main.post {
+            val d = driver ?: return@post
+            val rs = runCatching { d.onNotify(c.uuid.toString(), v, session) }.onFailure { addLog("Erreur de décodage : $it") }.getOrDefault(emptyList())
+            rs.forEach { r ->
+                addLog("   = ${r.value} ${r.unitLabel}${if (r.stable) " stable" else ""}${r.extra?.let { " · $it" } ?: ""}")
+                onReading(r)
+            }
         }
     }
 
-    private fun onReading(r: ScaleReading) {
+    private fun onReading(r: WeightReading) {
         val now = System.currentTimeMillis()
         if (lastValue != r.value) { lastValue = r.value; lastChange = now }
-        // Si la balance n'envoie pas l'indicateur « stable », on le déduit : même valeur depuis 1,5 s.
+        // Si la balance n'envoie pas d'indicateur « stable », on le déduit : même valeur depuis 1,5 s.
         val stable = r.stable || (now - lastChange >= 1500 && reading?.value == r.value)
         reading = if (stable != r.stable) r.copy(stable = stable) else r
-        if (status != ScaleStatus.CONNECTED) status = ScaleStatus.CONNECTED
     }
 
-    private fun short(u: UUID): String {
-        val s = u.toString()
-        return if (s.endsWith("-0000-1000-8000-00805f9b34fb") && s.startsWith("0000")) s.substring(4, 8).uppercase(Locale.ROOT) else s
-    }
+    private fun short(u: UUID) = ScaleDrivers.short(u.toString())
     private fun props(p: Int): String {
         val l = mutableListOf<String>()
         if (p and BluetoothGattCharacteristic.PROPERTY_READ != 0) l += "r"

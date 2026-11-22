@@ -56,6 +56,20 @@ bouton « Utiliser ce poids » (conversion en grammes), tare, remplissage automa
 (trames brutes en hexadécimal, copiable). Poignée de main et déchiffrement A7 : bibliothèque officielle
 `com.github.elinkthings:AILinkSecretAndroid` (JitPack). Décodage dans `ScaleProtocol.kt`, testé dans `ScaleDecoderTest.kt`.
 
+## Autres balances Bluetooth (v1.4)
+
+Architecture de pilotes (`ScaleDrivers.kt`) : détection automatique d'après l'annonce Bluetooth puis d'après les services GATT.
+
+| Famille | Statut | Source |
+| --- | --- | --- |
+| AiLink / Elink (balances nutrition, CID 0x0034 / 0x006C) | confirmé (doc fabricant) | manuel elinkthings T1L/T2L, SDK officiel |
+| Bluetooth SIG Weight Scale 0x181D / 0x2A9D | confirmé (norme) | spécification Bluetooth SIG |
+| Bluetooth SIG Body Composition 0x181B / 0x2A9C | confirmé (norme) | spécification Bluetooth SIG |
+| Decent Scale / Half Decent | confirmé (doc fabricant) | decentespresso.com/decentscale_api |
+| BOOKOO Themis Mini / Ultra | confirmé (doc fabricant, MIT) | github.com/BooKooCode/OpenSource |
+| Etekcity Smart Nutrition Scale ESN00 | déduit (rétro-ingénierie publique, MIT) | github.com/hertzg/metekcity |
+| Tout autre appareil | journal seulement | connexion possible, trames brutes dans le journal technique |
+
 ## Installer sur ton Samsung (APK)
 
 1. Télécharge `Calories-v1.0.apk` sur le téléphone.

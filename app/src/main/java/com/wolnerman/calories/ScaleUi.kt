@@ -46,7 +46,7 @@ fun ScalePanel(onUse: (Double) -> Unit) {
     var debug by rememberSaveable { mutableStateOf(false) }
     var auto by rememberSaveable { mutableStateOf(false) }
     var permMsg by remember { mutableStateOf<String?>(null) }
-    var lastAutoSeq by remember { mutableStateOf(-1) }
+    var lastAuto by remember { mutableStateOf<Double?>(null) }
 
     val enableBt = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (mgr.isBluetoothOn()) mgr.startScan() else permMsg = "Le Bluetooth doit être activé pour utiliser la balance."
@@ -74,14 +74,14 @@ fun ScalePanel(onUse: (Double) -> Unit) {
     val r = mgr.reading
     LaunchedEffect(r, auto) {
         val g = r?.grams
-        if (auto && r != null && r.stable && g != null && g > 0 && r.seq != lastAutoSeq) { lastAutoSeq = r.seq; onUse(g) }
+        if (auto && r != null && r.stable && g != null && g > 0 && (lastAuto == null || Math.abs(g - lastAuto!!) >= 0.5)) { lastAuto = g; onUse(g) }
     }
 
     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             when (mgr.status) {
                 ScaleStatus.IDLE, ScaleStatus.ERROR -> {
-                    OutlinedButton(onClick = { connectClicked() }, modifier = Modifier.fillMaxWidth()) { Text("⚖️ Connecter la balance") }
+                    OutlinedButton(onClick = { connectClicked() }, modifier = Modifier.fillMaxWidth()) { Text("⚖️ Connecter une balance") }
                 }
                 ScaleStatus.SCANNING -> {
                     LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -95,11 +95,13 @@ fun ScalePanel(onUse: (Double) -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Column(Modifier.weight(1f)) {
                             Text(mgr.deviceName ?: "Balance", style = MaterialTheme.typography.labelMedium)
+                            mgr.driverLabel?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             if (r == null) Text("En attente du poids…", style = MaterialTheme.typography.bodyMedium)
                             else {
                                 Text("${fmtWeight(r.value, r.decimals)} ${r.unitLabel}", fontSize = 30.sp, fontWeight = FontWeight.Bold)
                                 val g = r.grams
-                                if (r.unit != ScaleUnits.G && g != null) Text("≈ ${fmtWeight(g, 0)} g", style = MaterialTheme.typography.bodySmall)
+                                if (r.unitLabel != "g" && g != null) Text("≈ ${fmtWeight(g, 0)} g", style = MaterialTheme.typography.bodySmall)
+                                r.extra?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                             }
                         }
                         if (r != null) {
@@ -112,7 +114,7 @@ fun ScalePanel(onUse: (Double) -> Unit) {
                     val g = r?.grams
                     Button(onClick = { g?.let { onUse(it) } }, enabled = g != null && g > 0, modifier = Modifier.fillMaxWidth()) { Text("Utiliser ce poids") }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { mgr.tare() }, modifier = Modifier.weight(1f)) { Text("Tare (zéro)") }
+                        if (mgr.canTare) OutlinedButton(onClick = { mgr.tare() }, modifier = Modifier.weight(1f)) { Text("Tare (zéro)") }
                         OutlinedButton(onClick = { mgr.disconnect() }, modifier = Modifier.weight(1f)) { Text("Déconnecter") }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { auto = !auto }) {
@@ -126,13 +128,17 @@ fun ScalePanel(onUse: (Double) -> Unit) {
                     color = if (permMsg != null || mgr.status == ScaleStatus.ERROR) Color(0xFFC62828) else MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (mgr.status == ScaleStatus.SCANNING || (mgr.status != ScaleStatus.CONNECTED && mgr.found.isNotEmpty())) {
-                val list = mgr.found.filter { debug || it.aiLink }.sortedWith(compareByDescending<FoundDevice> { it.aiLink }.thenByDescending { it.rssi })
-                list.take(12).forEach { d ->
+                val list = mgr.found.filter { it.known || it.name != null || debug }
+                    .sortedWith(compareByDescending<FoundDevice> { it.driver?.kitchen == true }.thenByDescending { it.known }.thenByDescending { it.rssi })
+                if (list.isNotEmpty()) Text("Appareils à proximité (touche pour connecter) :", style = MaterialTheme.typography.labelMedium)
+                list.take(25).forEach { d ->
                     Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surface,
                         modifier = Modifier.fillMaxWidth().clickable { mgr.connect(d) }) {
                         Column(Modifier.padding(8.dp)) {
-                            Text((if (d.aiLink) "⚖️ " else "") + (d.name ?: "Appareil sans nom"), fontWeight = FontWeight.SemiBold)
-                            Text("${d.address} · signal ${d.rssi} dBm · touche pour connecter", style = MaterialTheme.typography.bodySmall)
+                            Text((if (d.known) "⚖️ " else "") + (d.name ?: "Appareil sans nom"), fontWeight = FontWeight.SemiBold)
+                            Text(d.typeLabel + (d.driver?.let { if (it.confirmed) "" else " (protocole déduit)" } ?: " · journal seulement"),
+                                style = MaterialTheme.typography.bodySmall, color = if (d.known) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("${d.address} · signal ${d.rssi} dBm", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -152,15 +158,16 @@ private fun DebugPanel(mgr: ScaleManager) {
     val mono = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp, lineHeight = 12.sp)
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("Appareil : ${mgr.deviceName ?: "—"}  MAC : ${mgr.deviceMac ?: "—"}", style = mono)
-        Text("Version appli : 1.3 · chiffrement AiLink : ${AiLinkCrypto.error?.let { "ERREUR $it" } ?: "ok"}", style = mono)
+        Text("Pilote : ${mgr.driverLabel ?: "—"}", style = mono)
+        Text("Version appli : 1.4 · chiffrement AiLink : ${AiLinkCrypto.error?.let { "ERREUR $it" } ?: "ok"}", style = mono)
         if (mgr.gattServices.isNotEmpty()) Text("Services : " + mgr.gattServices.joinToString("  "), style = mono)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = {
                 val text = buildString {
-                    appendLine("Calories 1.3 — journal balance")
-                    appendLine("Appareil : ${mgr.deviceName} ${mgr.deviceMac}")
+                    appendLine("Calories 1.4 — journal balance")
+                    appendLine("Appareil : ${mgr.deviceName} ${mgr.deviceMac} · pilote : ${mgr.driverLabel}")
                     appendLine("Services : ${mgr.gattServices.joinToString("  ")}")
-                    mgr.found.filter { it.aiLink }.forEach { appendLine("Trouvé : ${it.name} ${it.address} ${it.services} ${it.rawHex}") }
+                    mgr.found.forEach { appendLine("Trouvé : ${it.name} ${it.address} type=${it.driver?.id ?: "inconnu"} services=${it.adv.services} ${it.rawHex}") }
                     mgr.log.forEach { appendLine(it) }
                 }
                 (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Journal balance", text))

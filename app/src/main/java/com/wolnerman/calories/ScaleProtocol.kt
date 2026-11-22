@@ -40,8 +40,8 @@ object AiLinkProtocol {
 /** Trame A7 brute découpée (payload encore éventuellement chiffré). */
 data class A7Frame(val cid: Int, val payload: ByteArray, val checksumOk: Boolean)
 
-/** Une mesure de poids décodée. */
-data class ScaleReading(
+/** Une mesure de poids AiLink décodée (unités AiLink). */
+data class AiLinkReading(
     val seq: Int,
     val rawValue: Int,
     val unit: Int,
@@ -138,7 +138,7 @@ object ScaleDecoder {
      * Décode un payload A7 EN CLAIR de type poids (CID 0x0034 / 0x006C et compatibles) :
      * [0]=0x01 [1]=n° de séquence [2..4]=poids (gros-boutiste) [5]=unité [6]=décimales [7]=signe [8]=1 temps réel / 2 stable
      */
-    fun decodeWeight(p: ByteArray): ScaleReading? {
+    fun decodeWeight(p: ByteArray): AiLinkReading? {
         if (p.size < 8) return null
         if ((p[0].toInt() and 0xFF) != AiLinkProtocol.TYPE_WEIGHT) return null
         val raw = ((p[2].toInt() and 0xFF) shl 16) or ((p[3].toInt() and 0xFF) shl 8) or (p[4].toInt() and 0xFF)
@@ -148,14 +148,14 @@ object ScaleDecoder {
         val type = if (p.size >= 9) p[8].toInt() and 0xFF else 0
         if (unit > 0x0A || dec > 3 || sign > 1) return null
         if (p.size >= 9 && type != 1 && type != 2) return null
-        return ScaleReading(p[1].toInt() and 0xFF, raw, unit, dec, sign == 1, type == 2)
+        return AiLinkReading(p[1].toInt() and 0xFF, raw, unit, dec, sign == 1, type == 2)
     }
 
     /**
      * Décode une notification complète. [decrypt] déchiffre un payload (cid, payload) ; s'il échoue
      * ou donne un résultat incohérent, on essaie le payload tel quel (balances non chiffrées).
      */
-    fun decodeNotification(data: ByteArray, decrypt: ((Int, ByteArray) -> ByteArray?)?): List<Pair<A7Frame, ScaleReading?>> =
+    fun decodeNotification(data: ByteArray, decrypt: ((Int, ByteArray) -> ByteArray?)?): List<Pair<A7Frame, AiLinkReading?>> =
         splitA7(data).map { f ->
             val dec = if (f.checksumOk) decrypt?.let { runCatching { it(f.cid, f.payload.copyOf()) }.getOrNull() } else null
             val r = dec?.let { decodeWeight(it) } ?: decodeWeight(f.payload)
@@ -208,6 +208,15 @@ object ScaleDecoder {
                 while (j + 1 < i + 1 + len) {
                     out += String.format(Locale.US, "%04X", ((r[j + 1].toInt() and 0xFF) shl 8) or (r[j].toInt() and 0xFF))
                     j += 2
+                }
+            } else if (type == 0x06 || type == 0x07) {
+                // UUID 128 bits (petit-boutiste) : on garde la forme courte si c'est la base Bluetooth SIG
+                var j = i + 2
+                while (j + 15 < i + 1 + len) {
+                    val u = r.copyOfRange(j, j + 16).reversedArray()
+                    val hex = u.joinToString("") { String.format(Locale.US, "%02X", it) }
+                    out += if (hex.startsWith("0000") && hex.endsWith("00001000800000805F9B34FB")) hex.substring(4, 8) else hex
+                    j += 16
                 }
             }
             i += 1 + len

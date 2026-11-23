@@ -120,6 +120,12 @@ Architecture de pilotes (`ScaleDrivers.kt`) : détection automatique d'après l'
 - **Onglet « Graphiques »** : période 1, 2, 4, 8 ou 12 semaines avec ◀ / ▶ pour remonter dans le temps. En 1 semaine : du lundi au dimanche, chaque jour étiqueté (lun., mar., …). Calories par jour (vert ≤ objectif, rouge au-dessus, ligne bleue = objectif), macros empilées (G/P/L), moyenne par semaine (2 semaines et plus), résumé (moyenne kcal/jour, jours dans l'objectif, jours renseignés). Les jours sans saisie sont un trou (pas un zéro). Toucher une barre ou un jour de la liste affiche le détail : total vs objectif, macros et aliments du jour.
 - **Rappel du soir** (Profil) : interrupteur + heure (20:00 par défaut). Chaque jour à cette heure, si le total du jour est sous l'objectif : « Il te manque X kcal pour atteindre ton objectif de Y kcal aujourd'hui. » Objectif atteint = pas de notification. 100 % local (AlarmManager, reprogrammé chaque jour et après redémarrage). Toucher la notification ouvre l'appli sur « Aujourd'hui ». Bouton « Tester la notification ». Android 13+ demande l'autorisation des notifications à l'activation.
 
+## Base d'aliments et saisie rapide (v2.3)
+- Environ 500 aliments intégrés (viandes, poissons, charcuterie, féculents, légumineuses, légumes, fruits, laitages, fromages, matières grasses, sucré, boissons, plats courants, plats antillais). Valeurs pour 100 g issues de la table **Ciqual 2025 de l'Anses** (https://doi.org/10.57745/RDMHWY, Licence Ouverte Etalab 2.0). Plats antillais (colombo, féroce, riz-pois, court-bouillon, blaff, ti-punch…) calculés à partir des ingrédients Ciqual. Données générées par `tools/gen_foods.py` depuis `tools/foods_spec.txt`.
+- Saisie tolérante : « 2 œufs », « œufs cuits », « 200 g riz », « 3 tranches de pain », « 1/2 avocat », « 1 verre de lait », pluriels, accents, articles, une faute de frappe. La quantité remplit « Quantité g » avec une note (« 2 × Œuf (≈ 50 g) = 100 g »).
+- Liste déroulante : kcal et macros pour 100 g sous chaque nom.
+- « Ajouter » : si les calories sont inconnues, message rouge juste sous le bouton.
+
 ## Installer sur ton Samsung (APK)
 
 1. Télécharge `Calories-v1.0.apk` sur le téléphone.

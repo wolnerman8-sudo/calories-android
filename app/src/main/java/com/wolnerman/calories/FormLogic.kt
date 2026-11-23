@@ -40,7 +40,7 @@ fun fillFromGuess(g: FoodGuess, scaleStableGrams: Double?): FormFill {
         else -> "100" to "par défaut"
     }
     val f = g.food
-    return if (f != null) FormFill(g.name, grams, f.kcalPer100g.toString(), fmtNum(f.carbs), fmtNum(f.proteins), fmtNum(f.fat), f, src)
+    return if (f != null) FormFill(g.name, grams, f.kcalPer100g.toString(), f.carbs?.let { fmtNum(it) } ?: "", f.proteins?.let { fmtNum(it) } ?: "", f.fat?.let { fmtNum(it) } ?: "", f, src)
     else FormFill(g.name, grams, g.kcal100?.takeIf { it >= 0 }?.let { fmtNum(Math.round(it).toDouble()) } ?: "", "", "", "", null, src)
 }
 
@@ -50,7 +50,7 @@ fun addProblem(name: String, grams: String, kcal100: String): String? {
     val k = parseNum(kcal100)
     return when {
         name.isBlank() -> "Saisis ou choisis un aliment."
-        kcal100.isBlank() -> "kcal inconnues pour « ${name.trim()} » : saisis les kcal pour 100 g (étiquette ou estimation)."
+        kcal100.isBlank() -> kcalMissingMessage(name)
         k == null -> "kcal/100 g illisibles : tape un nombre (ex. 250)."
         k < 0 -> "Les kcal/100 g ne peuvent pas être négatives."
         k > 1000 -> "kcal/100 g trop élevées (max 900 environ) : vérifie la valeur."
@@ -60,3 +60,7 @@ fun addProblem(name: String, grams: String, kcal100: String): String? {
         else -> null
     }
 }
+
+/** Message rouge affiché sous « Ajouter » quand les calories sont inconnues. */
+fun kcalMissingMessage(name: String): String =
+    "Calories inconnues pour « ${name.trim()} » : choisis un aliment de la liste ou saisis les kcal pour 100 g."

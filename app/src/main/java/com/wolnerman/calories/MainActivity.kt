@@ -249,6 +249,8 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
     var pendingCameraPath by rememberSaveable { mutableStateOf<String?>(null) }
     var photoBusy by remember { mutableStateOf(false) }
     var filledNote by remember { mutableStateOf<String?>(null) }   // bandeau vert après remplissage par la photo
+    var qtyNote by remember { mutableStateOf<String?>(null) }      // v2.3 : « 2 × Œuf (≈ 50 g) = 100 g »
+    val addMsg = remember { BringIntoViewRequester() }
     var addError by remember { mutableStateOf<String?>(null) }     // raison rouge après un appui sur « Ajouter »
     var addNotice by remember { mutableStateOf<String?>(null) }    // avis non bloquant (photo…)
     val formTop = remember { BringIntoViewRequester() }
@@ -315,7 +317,7 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
     // Nom de l'aliment intégré dont les valeurs ont été copiées automatiquement (null = saisie manuelle / scan)
     fun fillFood(f: Food) {
         kcal100 = f.kcalPer100g.toString()
-        carbs100 = fmt(f.carbs); prot100 = fmt(f.proteins); fat100 = fmt(f.fat)
+        carbs100 = f.carbs?.let { fmt(it) } ?: ""; prot100 = f.proteins?.let { fmt(it) } ?: ""; fat100 = f.fat?.let { fmt(it) } ?: ""
         fillNutr(f.nutrients); fermented = f.fermented; prebiotic = f.prebiotic
         autoFrom = f.name
     }
@@ -323,13 +325,21 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
         kcal100 = ""; carbs100 = ""; prot100 = ""; fat100 = ""; nutrTxt.clear()
         fermented = false; prebiotic = false; autoFrom = null
     }
+    /** v2.3 : quantité saisie en tête (« 2 œufs », « 200 g riz ») → Quantité g, avec une note. */
+    fun applyQuantity(text: String, food: Food?) {
+        val q = parseQuantity(text)
+        if (!q.hasQuantity) { qtyNote = null; return }
+        val r = quantityFor(q, food)
+        if (r != null) { grams = fmt(Math.round(r.grams * 10.0) / 10.0); qtyNote = r.note }
+        else qtyNote = if (food != null) "Poids d'une unité inconnu pour ${food.name} : indique la quantité en grammes." else null
+    }
     /** Saisie du nom : remplit automatiquement si le texte correspond à un aliment intégré. */
     fun onNameChange(newName: String) {
         name = newName
         val manual = autoFrom == null && (kcal100.isNotBlank() || scanned != null)
-        if (manual) return // ne jamais écraser des valeurs tapées à la main ou venant d'un scan
         val m = findFood(newName)
-        if (m != null) { if (m.name != autoFrom) fillFood(m) } else if (autoFrom != null) clearAuto()
+        if (!manual) { if (m != null) { if (m.name != autoFrom) fillFood(m) } else if (autoFrom != null) clearAuto() }
+        applyQuantity(newName, if (manual) null else m)
     }
 
     val suggestions = remember(name) { suggestFoods(name) }
@@ -384,19 +394,26 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                 ExposedDropdownMenu(expanded = expanded && suggestions.isNotEmpty(), onDismissRequest = { expanded = false }) {
                     suggestions.forEach { f ->
                         DropdownMenuItem(
-                            text = { Text("${f.name}  ·  ${f.kcalPer100g} kcal/100 g") },
+                            text = {
+                                Column {
+                                    Text(f.name)
+                                    Text(foodLine(f), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                }
+                            },
                             onClick = {
-                                // Choix explicite : remplace toujours les valeurs
+                                // Choix explicite : remplace toujours les valeurs ; garde la quantité tapée (« 2 œufs »)
                                 scanned = null
+                                val typed = name
                                 name = f.name; fillFood(f)
-                                expanded = false
+                                applyQuantity(typed, f)
+                                expanded = false; addError = null
                             }
                         )
                     }
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(grams, { grams = it.take(8); addError = null }, label = { Text("Quantité g", maxLines = 1) }, singleLine = true,
+                OutlinedTextField(grams, { grams = it.take(8); addError = null; qtyNote = null }, label = { Text("Quantité g", maxLines = 1) }, singleLine = true,
                     isError = name.isNotBlank() && (g == null || g <= 0),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
                 OutlinedTextField(kcal100, { kcal100 = it.take(8); autoFrom = null; addError = null }, label = { Text("kcal/100 g", maxLines = 1) }, singleLine = true,
@@ -406,7 +423,8 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     } else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
             }
-            ScalePanel(onUse = { w -> grams = fmt(Math.round(w * 10.0) / 10.0) })
+            qtyNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Color(0xFF1B5E20), fontWeight = FontWeight.SemiBold) }
+            ScalePanel(onUse = { w -> grams = fmt(Math.round(w * 10.0) / 10.0); qtyNote = null })
             autoFrom?.let { Text("Valeurs de la liste : $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
             Text("Pour 100 g (facultatif) : G = glucides, P = protéines, L = lipides", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -488,20 +506,23 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                 scope.launch { runCatching { formTop.bringIntoView() } }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (calc != null) "= ${calc.kcal} kcal" else (problem ?: ""),
-                    style = if (calc != null) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodySmall,
-                    color = if (calc != null) Color.Unspecified else Color(0xFFC62828), modifier = Modifier.weight(1f))
+                Text(if (calc != null) "= ${calc.kcal} kcal" else "= — kcal",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = if (calc != null) Color.Unspecified else Color.Gray, modifier = Modifier.weight(1f))
                 // v2.1 : toujours cliquable ; ajoute, ou affiche la raison en rouge
                 Button(onClick = {
                     if (!valid) {
                         addError = problem ?: "Impossible d'ajouter : vérifie le formulaire."
-                        scope.launch { runCatching { formTop.bringIntoView() } }
+                        // v2.3 : le message est juste sous le bouton ; on le fait défiler à l'écran
+                        scope.launch { kotlinx.coroutines.delay(50); runCatching { addMsg.bringIntoView() } }
                         return@Button
                     }
                     val photo = photoPath?.takeIf { p -> runCatching { File(p).exists() }.getOrDefault(false) }
                     if (photoPath != null && photo == null) addNotice = "Photo introuvable : aliment ajouté sans photo."
                     val entry = try {
-                        Entry(System.currentTimeMillis(), today(), nowTime(), name.trim(), g!!, k!!, photo,
+                        // « 2 Œuf » → nom de l'aliment de la liste (la quantité est déjà dans Quantité g)
+                        val entryName = autoFrom?.takeIf { parseQuantity(name).hasQuantity } ?: name.trim()
+                        Entry(System.currentTimeMillis(), today(), nowTime(), entryName, g!!, k!!, photo,
                             parseNum(carbs100)?.takeIf { it >= 0 }, parseNum(prot100)?.takeIf { it >= 0 }, parseNum(fat100)?.takeIf { it >= 0 },
                             nutr = nutrTxt.mapNotNull { (key, v) -> parseNum(v)?.takeIf { it >= 0 }?.let { key to it } }.toMap(),
                             fermented = fermented, prebiotic = prebiotic)
@@ -515,12 +536,17 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     }
                     photoPath = null
                     name = ""; grams = "100"; kcal100 = ""; carbs100 = ""; prot100 = ""; fat100 = ""; nutrTxt.clear(); fermented = false; prebiotic = false; barcode = ""; scanned = null; scanMsg = null; autoFrom = null
-                    filledNote = null; addError = null
+                    filledNote = null; addError = null; qtyNote = null
                     addNotice = (addNotice?.let { "$it " } ?: "") + "✓ Ajouté : ${entry.name} (${entry.kcal} kcal)."
                 }, modifier = Modifier.bringIntoViewRequester(addRow),
                     colors = if (valid) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColors(containerColor = Color(0xFF9E9E9E))) { Text("Ajouter") }
             }
-            addError?.let { Text(it, color = Color(0xFFC62828), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold) }
+            // v2.3 : raison en rouge directement sous « Ajouter » (calories inconnues affichées même avant l'appui)
+            val underAdd = addError ?: if (name.isNotBlank() && kcal100.isBlank()) kcalMissingMessage(name) else null
+            underAdd?.let {
+                Text(it, color = Color(0xFFC62828), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.fillMaxWidth().bringIntoViewRequester(addMsg))
+            }
             addNotice?.let {
                 Text(it, color = Color(0xFF2E7D32), style = MaterialTheme.typography.bodySmall)
                 LaunchedEffect(it) { kotlinx.coroutines.delay(6000); addNotice = null }
@@ -664,6 +690,11 @@ fun ProfileScreen(storage: Storage, goal: Int, entries: List<Entry>, onUseGoal: 
         item { HealthConnectCard(entries) { kg -> weight = fmt(kg) } }
         item { RecognitionSettingsCard() }
         item { AppVersionText(Modifier.padding(top = 4.dp)) }
+        item {
+            Text("Valeurs nutritionnelles de la liste : Anses, table Ciqual 2025 (doi.org/10.57745/RDMHWY) ; " +
+                "plats antillais calculés à partir des ingrédients Ciqual.",
+                style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+        }
     }
 }
 

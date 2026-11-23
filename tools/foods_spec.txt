@@ -1,0 +1,519 @@
+# Spécification de la base d'aliments intégrée (v2.3).
+# Ligne : code Ciqual | nom affiché | poids unitaire g | unité | alias (;) | drapeaux (F=fermenté, P=prébiotique)
+# R:… = recette calculée à partir d'ingrédients Ciqual (code:grammes,…). X:kcal,G,P,L = valeur conservée des versions précédentes.
+## Œufs
+22000 | Œuf entier (cru) | 50 | œuf | oeuf;oeuf entier;oeuf cru;oeuf frais | 
+22010 | Œuf dur | 50 | œuf | oeuf cuit;oeuf bouilli;oeufs durs | 
+22014 | Œuf à la coque | 50 | œuf | oeuf coque | 
+22011 | Œuf poché | 50 | œuf | oeuf mollet;oeuf poche | 
+R:22505:50,17440:5 | Œuf au plat (avec matière grasse) | 55 | œuf | oeuf au plat;oeuf sur le plat;oeuf frit;oeuf a la poele | 
+22505 | Œuf au plat (sans matière grasse) | 50 | œuf | oeuf au plat sans huile | 
+22502 | Œuf brouillé (avec matière grasse) | 60 | œuf | oeufs brouilles | 
+22500 | Omelette nature | 120 | omelette (2 œufs) | omelette | 
+22506 | Omelette au fromage | 140 | omelette | | 
+22507 | Omelette aux lardons | 140 | omelette | | 
+22508 | Omelette aux champignons | 140 | omelette | | 
+22510 | Tortilla espagnole (omelette pommes de terre) | 150 | part | tortilla espagnole | 
+22001 | Blanc d'œuf (cru) | 33 | blanc | blanc d oeuf;blancs d oeufs | 
+22008 | Blanc d'œuf cuit | 33 | blanc | | 
+22002 | Jaune d'œuf (cru) | 17 | jaune | jaune d oeuf | 
+22050 | Œuf de caille | 10 | œuf | | 
+19674 | Flan aux œufs | 100 | pot | flan | 
+39209 | Crème caramel | 100 | pot | | 
+## Viandes et volailles
+36018 | Blanc de poulet grillé | 120 | filet | blanc de poulet cuit;filet de poulet;escalope de poulet;poulet | 
+36006 | Cuisse de poulet rôtie (sans peau) | 150 | cuisse | cuisse de poulet cuite | 
+36004 | Cuisse de poulet rôtie (avec peau) | 150 | cuisse | | 
+36031 | Cuisse de poulet bouillie (avec peau) | 150 | cuisse | poulet bouilli | 
+36005 | Poulet rôti (viande et peau) | 150 | portion | poulet roti | 
+36033 | Aile de poulet rôtie | 40 | aile | ailes de poulet;wings | 
+36302 | Dinde rôtie | 120 | portion | dinde | 
+36306 | Escalope de dinde grillée | 120 | escalope | | 
+36202 | Canard rôti (sans peau) | 150 | portion | canard | 
+36205 | Magret de canard grillé | 150 | portion | magret | 
+34002 | Lapin cuit | 150 | portion | lapin | 
+36102 | Caille cuite | 100 | caille | | 
+6200 | Steak de bœuf grillé | 120 | steak | steak;bifteck;boeuf grille | 
+6251 | Steak haché 5% MG cuit | 100 | steak haché | bœuf haché 5% cuit;steak hache;viande hachee | 
+6253 | Steak haché 10% MG cuit | 100 | steak haché | | 
+6257 | Steak haché 20% MG cuit | 100 | steak haché | | 
+6100 | Entrecôte grillée | 200 | entrecôte | entrecote | 
+6207 | Rumsteck grillé | 150 | portion | | 
+6105 | Faux-filet rôti | 150 | portion | | 
+6210 | Rôti de bœuf (rosbif) | 120 | portion | rosbif | 
+6230 | Bœuf bourguignon / pot-au-feu (viande cuite) | 150 | portion | boeuf a bouillir | 
+6101 | Bœuf braisé | 150 | portion | | 
+6520 | Escalope de veau cuite | 120 | escalope | veau | 
+6551 | Rôti de veau cuit | 120 | portion | | 
+28101 | Côte de porc grillée | 150 | côte | cotelette de porc;porc | 
+28203 | Filet mignon de porc cuit | 120 | portion | | 
+28301 | Rôti de porc cuit | 120 | portion | | 
+28401 | Travers de porc braisés | 150 | portion | travers;ribs | 
+28010 | Épaule de porc cuite | 150 | portion | | 
+21524 | Côtelette d'agneau grillée | 70 | côtelette | agneau | 
+21503 | Gigot d'agneau rôti | 150 | portion | | 
+21523 | Viande de mouton / cabri cuite (moyenne agneau) | 150 | portion | cabri;mouton;colombo de cabri viande | 
+40109 | Foie de volaille cuit | 100 | portion | | 
+40107 | Foie de veau cuit | 120 | portion | | 
+36036 | Escalope panée de poulet | 120 | escalope | escalope milanaise | 
+25512 | Nuggets de poulet | 20 | nugget | nuggets;croquettes de poulet | 
+25089 | Cordon bleu de volaille | 100 | cordon bleu | | 
+## Charcuterie
+28900 | Jambon blanc (cuit supérieur) | 40 | tranche | jambon;jambon cuit;jambon de paris | 
+28812 | Jambon sec | 20 | tranche | jambon cru | 
+28964 | Blanc de dinde (tranche) | 30 | tranche | | 
+28963 | Blanc de poulet (tranche) | 30 | tranche | | 
+28504 | Lardons cuits | | | lardons | 
+30005 | Chipolata cuite | 50 | chipolata | | 
+30011 | Saucisse de Toulouse cuite | 100 | saucisse | | 
+30134 | Saucisse de Francfort / knack | 35 | saucisse | knacki;saucisse knack;hot dog saucisse | 
+30131 | Saucisse de volaille type knack | 35 | saucisse | | 
+30155 | Merguez cuite | 50 | merguez | | 
+30300 | Saucisson sec | 10 | rondelle | saucisson | 
+30315 | Chorizo | 10 | rondelle | | 
+8211 | Pâté de campagne | 30 | tartine | pate;terrine | 
+8001 | Rillettes de porc | 30 | tartine | rillettes | 
+8704 | Boudin noir grillé | 100 | boudin | | 
+8742 | Boudin créole (antillais) | 50 | boudin | boudin antillais;boudin creole | 
+8800 | Boudin blanc grillé | 100 | boudin | | 
+28505 | Corned-beef | 50 | tranche | | 
+30730 | Cervelas | 100 | cervelas | | 
+8331 | Foie gras | 40 | tranche | | 
+## Poissons et fruits de mer
+25997 | Cabillaud cuit | 150 | filet | morue fraiche;cabillaud | 
+26249 | Poisson blanc cuit | 150 | filet | poisson | 
+26140 | Poisson cuit (moyenne) | 150 | portion | poisson grille;poisson grillé | 
+26147 | Vivaneau cuit | 150 | portion | vivaneau;poisson rouge;sarde | 
+25990 | Mahi-mahi / dorade coryphène cuit | 150 | portion | dorade coryphene;mahi mahi | 
+26041 | Thon frais cuit | 150 | portion | thon | 
+26039 | Thon au naturel (conserve) | 100 | boîte égouttée | thon en conserve (eau);thon en boite;thon naturel | 
+26245 | Thon à l'huile (conserve) | 100 | boîte égouttée | | 
+26229 | Saumon grillé | 130 | pavé | saumon cuit;pave de saumon;saumon | 
+26037 | Saumon fumé | 30 | tranche | | 
+26034 | Sardines à l'huile (conserve) | 25 | sardine | sardine | 
+26136 | Sardine grillée | 50 | sardine | | 
+26019 | Maquereau cuit | 150 | portion | maquereau | 
+26123 | Maquereau au naturel (conserve) | 100 | boîte | | 
+26098 | Morue salée sèche | | | morue seche | 
+26024 | Morue dessalée cuite | | | morue dessalée cuite;morue;morue cuite | 
+25433 | Accras de morue / de poisson | 20 | accra | accras;accra de morue;acras | 
+26015 | Lieu noir cuit | 150 | filet | | 
+26022 | Merlan vapeur | 150 | filet | | 
+26222 | Daurade grise rôtie | 150 | portion | | 
+27031 | Dorade royale rôtie | 150 | portion | daurade | 
+27030 | Bar / loup rôti | 150 | portion | | 
+26093 | Espadon cuit | 150 | portion | | 
+27007 | Truite vapeur | 150 | portion | truite | 
+26012 | Hareng frit | 100 | portion | | 
+26013 | Hareng fumé | 50 | filet | hareng saur | 
+26030 | Poisson pané frit | 100 | filet | poisson pane;colin pane | 
+26046 | Surimi | 17 | bâtonnet | | 
+10101 | Crevettes cuites | | | ouassous / crevettes cuites;crevettes;ouassous;z habitants | 
+10022 | Langouste cuite | 150 | portion | langouste | 
+10025 | Crabe cuit | | | crabe;matoutou crabe | 
+10005 | Crabe en conserve (miettes) | | | | 
+10013 | Moules cuites | | | moules | 
+10037 | Calmar / encornet cuit | | | calamar;encornet | 
+10084 | Calmar frit / à la romaine | | | | 
+10079 | Poulpe / chatrou cuit | 150 | portion | chatrou;poulpe;zourite | 
+X:130,1.7,26,1 | Lambi cuit | 150 | portion | lambi;strombe | 
+10031 | Écrevisses cuites | | | | 
+## Plats antillais
+R:36031:45,4003:20,20002:10,13177:10,20035:5,17440:3,18066:7 | Colombo de poulet | 300 | assiette | colombo;colombo poulet | 
+R:21523:45,4003:20,20002:10,13177:10,20035:5,17440:3,18066:7 | Colombo de cabri / mouton | 300 | assiette | colombo cabri | 
+R:13004:50,26024:20,54035:20,17440:2,2031:3,20034:5 | Féroce d'avocat | 150 | portion | feroce;feroce avocat | 
+R:9104:65,20503:30,17440:2,20035:3 | Riz-pois rouges (riz aux haricots rouges) | 250 | assiette | riz pois rouges;riz et pois;riz haricots rouges;riz pois | 
+R:9104:65,20833:30,17440:2,20035:3 | Riz-pois d'Angole | 250 | assiette | riz pois d angole | 
+R:26147:60,20242:20,20035:8,17440:3,2031:2,18066:7 | Court-bouillon de poisson | 300 | assiette | court bouillon;court-bouillon | 
+R:26147:55,18066:40,2031:3,20035:2 | Blaff de poisson | 300 | assiette | blaff | 
+R:10079:60,20242:20,20035:8,17440:4,18066:8 | Chatrou (poulpe) en sauce | 250 | assiette | fricassee de chatrou;chatrou en sauce | 
+R:LAMBI:60,20242:20,20035:8,17440:4,18066:8 | Fricassée de lambi | 250 | assiette | lambi en sauce | 
+R:26024:50,20242:20,20035:10,17440:5,18066:15 | Morue en sauce (rougail / chiquetaille) | 200 | portion | chiquetaille;rougail de morue;morue en sauce | 
+R:10101:60,20242:20,20035:8,17440:4,18066:8 | Ouassous / crevettes en sauce | 250 | assiette | ouassous en sauce;fricassee d ouassous | 
+R:36031:55,20242:20,20035:8,17440:4,18066:13 | Fricassée de poulet | 300 | assiette | poulet en sauce;poulet boucane;fricassee | 
+R:20503:65,4003:15,20035:5,17440:3,18066:12 | Haricots rouges en sauce (pois rouges) | 200 | portion | pois rouges;haricots rouges en sauce | 
+R:53101:88,17440:12 | Banane plantain frite (alloco) | 100 | portion | plantain frit;banane frite;alloco | 
+R:15006:20,31017:30,19041:50 | Blanc-manger coco (recette maison) | 120 | part | blanc manger coco;blanc-manger | 
+R:1004:75,31017:15,18066:7,2031:3 | Ti-punch | 40 | verre | ti punch;tipunch;punch | 
+R:1004:25,2070:30,2073:25,2367:15,31016:5 | Planteur | 200 | verre | | 
+R:1004:30,15006:15,19027:35,18041:20 | Punch coco | 60 | verre | | 
+25402 | Pâté créole / pâté salé (feuilleté à la viande) | 80 | pâté | pate creole;pate sale;pate cochon | 
+## Féculents
+9104 | Riz blanc cuit | 200 | assiette | riz;riz cuit;riz blanc | 
+9124 | Riz thaï cuit | 200 | assiette | riz thai | 
+9125 | Riz basmati cuit | 200 | assiette | riz basmati | 
+9103 | Riz complet cuit | 200 | assiette | riz complet | 
+9105 | Riz étuvé cuit | 200 | assiette | | 
+9100 | Riz blanc cru | | | riz cru | 
+9811 | Pâtes cuites | 220 | assiette | pates;spaghetti;macaroni;coquillettes;penne;tagliatelles | 
+9871 | Pâtes complètes cuites | 220 | assiette | | 
+9816 | Pâtes fraîches aux œufs cuites | 220 | assiette | | 
+9810 | Pâtes sèches crues | | | pates crues | 
+9683 | Semoule / couscous cuit | 200 | assiette | semoule;couscous graine;graine de couscous | 
+9691 | Boulgour cuit | 200 | assiette | boulgour | 
+9341 | Quinoa cuit | 200 | assiette | quinoa | 
+9615 | Polenta cuite | 200 | assiette | | 
+9901 | Vermicelles de riz cuites | | | | 
+4003 | Pomme de terre cuite à l'eau | 150 | pomme de terre | pomme de terre cuite;pommes de terre;patates | 
+4026 | Pomme de terre au four | 150 | pomme de terre | | 
+4015 | Pommes de terre sautées | 200 | portion | pommes de terre sautees;pommes sautees | 
+4047 | Purée de pommes de terre | 200 | portion | puree | 
+4032 | Frites (friteuse) | 150 | portion | frites;frite | 
+4030 | Frites au four | 150 | portion | | 
+4004 | Chips | 30 | petit paquet | chips | 
+20832 | Patate douce cuite (Martinique) | 150 | portion | patate douce cuite;patate douce | 
+4102 | Patate douce cuite (moyenne France) | 150 | portion | | 
+53503 | Igname cuite | 150 | portion | igname;yam | 
+20824 | Igname jaune cuite (Martinique) | 150 | portion | | 
+20825 | Igname Saint-Martin cuite (Martinique) | 150 | portion | | 
+20823 | Igname cousse-couche cuite (Martinique) | 150 | portion | cousse couche | 
+53101 | Banane plantain cuite | 150 | banane (½ plantain) | plantain;banane plantain;banane jaune plantain | 
+53100 | Banane plantain crue | | | | 
+53201 | Dachine / madère (taro) cuit | 150 | portion | dachine / madère cuite;dachine;madere;taro | 
+20813 | Fruit à pain cuit | 150 | portion | fruit a pain;fouyapen | 
+54034 | Manioc cuit | 150 | portion | manioc;cassave racine | 
+54035 | Farine de manioc / couac (gari) | 30 | c. à soupe | couac;farine manioc;gari | 
+4000 | Tapioca (cru) | | | | 
+20049 | Maïs doux en épi cuit | 150 | épi | maïs doux;mais;epi de mais | 
+7001 | Pain blanc (baguette) | 30 | tranche | pain (baguette);pain;baguette | 
+7007 | Pain tradition | 30 | tranche | tradition | 
+7110 | Pain complet | 30 | tranche | | 
+7100 | Pain de campagne | 30 | tranche | | 
+7002 | Pain au levain | 30 | tranche | | 
+7255 | Pain aux céréales | 30 | tranche | | 
+7200 | Pain de mie | 25 | tranche | pain de mie | 
+7111 | Pain de mie complet | 25 | tranche | | 
+7004 | Pain grillé (toast) | 25 | tranche | toast | 
+7259 | Pain burger / hot-dog | 55 | pain | bun | 
+7180 | Pain pita | 60 | pain | | 
+7815 | Tortilla de blé | 40 | galette | wrap galette;tortilla | 
+7300 | Biscotte | 9 | biscotte | biscottes | 
+7352 | Galette de riz soufflé | 9 | galette | | 
+7615 | Croissant | 50 | croissant | | 
+7730 | Pain au chocolat | 65 | pain au chocolat | chocolatine | 
+7720 | Pain aux raisins | 90 | pièce | | 
+7746 | Brioche | 35 | tranche | | 
+7711 | Pain au lait | 35 | pain | | 
+32005 | Corn-flakes (pétales de maïs) | 30 | bol | cornflakes;corn flakes | 
+32001 | Céréales chocolatées | 30 | bol | cereales | 
+32004 | Muesli | 45 | bol | | 
+32006 | Riz soufflé | 30 | bol | | 
+32140 | Flocons d'avoine | 40 | portion | avoine;porridge sec | P
+9313 | Porridge (flocons d'avoine cuits à l'eau) | 250 | bol | porridge | 
+9436 | Farine de blé | | | farine | 
+9545 | Farine de maïs | | | | 
+## Légumineuses
+20503 | Haricots rouges cuits | 150 | portion | haricots rouges;pois rouges cuits | 
+20502 | Haricots blancs cuits | 150 | portion | | 
+20194 | Haricots blancs sauce tomate | 150 | portion | baked beans | 
+20360 | Lentilles cuites | 150 | portion | lentilles | P
+20589 | Lentilles corail cuites | 150 | portion | | 
+20507 | Pois chiches cuits | 150 | portion | pois chiches | P
+20506 | Pois cassés cuits | 150 | portion | | 
+20833 | Pois d'Angole cuits | 150 | portion | pois d angole;pois de bois | P
+20513 | Flageolets cuits | 150 | portion | | 
+20500 | Fèves cuites | 150 | portion | | 
+20531 | Haricots mungo cuits | 150 | portion | | 
+20904 | Tofu nature | 100 | portion | tofu | 
+25621 | Houmous | 30 | c. à soupe | hummus | 
+## Légumes
+20276 | Tomate | 120 | tomate | tomate crue | 
+20172 | Tomate cerise | 15 | tomate | | 
+20242 | Tomate cuite | | | | 
+20009 | Carotte crue | 80 | carotte | carotte;carottes rapees | 
+20306 | Carotte cuite | 80 | carotte | | 
+20031 | Laitue / salade verte | 50 | portion | salade verte;salade;laitue | 
+20272 | Mesclun | 50 | portion | | 
+20217 | Roquette | 30 | portion | | 
+20019 | Concombre | 200 | concombre | | 
+20020 | Courgette crue | 200 | courgette | courgette | 
+20021 | Courgette cuite | 150 | portion | | 
+20053 | Aubergine crue | 250 | aubergine | | 
+20002 | Aubergine cuite | 150 | portion | aubergine;melongene | 
+20041 | Poivron cru | 150 | poivron | poivron;piment doux | 
+19999 | Poivron cuit | 150 | portion | | 
+20034 | Oignon cru | 100 | oignon | oignon | P
+20035 | Oignon cuit | 100 | oignon | | P
+20323 | Cive / oignon pays (cébette) | 15 | cive | cive;oignon pays | 
+11000 | Ail cru | 5 | gousse | ail | P
+20039 | Poireau cru | 150 | poireau | | P
+20327 | Poireau cuit | 150 | portion | poireau | P
+20057 | Brocoli cru | | | | 
+20304 | Brocoli cuit | 150 | portion | brocoli | 
+20017 | Chou-fleur cuit | 150 | portion | chou fleur | 
+20116 | Chou blanc cru | 100 | portion | chou;chou blanc | 
+20308 | Chou blanc cuit | 150 | portion | | 
+20014 | Chou rouge cru | 100 | portion | | 
+20309 | Choux de Bruxelles cuits | 150 | portion | | 
+20336 | Épinards cuits | 150 | portion | epinards | 
+20270 | Pousses d'épinard (crues) | 50 | portion | | 
+20320 | Haricots verts cuits | 150 | portion | haricots verts | 
+20326 | Petits pois cuits | 150 | portion | petits pois | 
+20010 | Champignons crus | 100 | portion | champignon | 
+20102 | Champignons de Paris cuits | 100 | portion | | 
+20003 | Betterave rouge cuite | 100 | portion | betterave | 
+20321 | Navet cuit | 150 | portion | | 
+20045 | Radis | 10 | radis | | 
+20023 | Céleri branche | 40 | branche | | 
+20025 | Céleri-rave cuit | 150 | portion | | 
+20096 | Potiron cuit | 150 | portion | potiron;citrouille | 
+20814 | Giraumon cuit (Martinique) | 150 | portion | giraumon;giromon | 
+20292 | Courge butternut cuite | 150 | portion | butternut;courge | 
+13177 | Christophine cuite | 150 | portion | christophine;chayotte;chouchou | 
+13128 | Christophine crue | | | | 
+20821 | Gombo cuit (Martinique) | 100 | portion | gombo;gombos;okra | 
+20000 | Artichaut cuit | 150 | portion | artichaut cuit;artichaut | P
+20299 | Asperges vertes cuites | 100 | portion | asperge;asperges | P
+20050 | Topinambour cuit | 150 | portion | topinambour | P
+20026 | Endive crue | 100 | endive | endive | 
+20028 | Fenouil cru | 100 | portion | | 
+20022 | Cresson | 50 | portion | | 
+11014 | Persil frais | 5 | c. à soupe | | 
+11074 | Gingembre frais | 5 | morceau | | 
+20151 | Piment (cru) | 5 | piment | piment;bondamanpiment;piment antillais | 
+13004 | Avocat | 150 | avocat (chair) | avocat;zaboka | 
+25018 | Ratatouille | 200 | portion | | 
+25604 | Salade verte nature | 50 | portion | | 
+## Fruits
+13005 | Banane | 120 | banane | banane;banane dessert;figue banane | 
+13039 | Pomme | 150 | pomme | | 
+13397 | Poire | 150 | poire | | 
+13034 | Orange | 150 | orange | | 
+13024 | Clémentine / mandarine | 60 | clémentine | clementine;mandarine | 
+13067 | Citron vert | 50 | citron | citron vert;lime | 
+13009 | Citron | 80 | citron | citron | 
+13025 | Mangue | 250 | mangue (chair) | mangue | 
+13002 | Ananas | 150 | tranche épaisse | ananas | 
+13035 | Papaye | 150 | portion | papaye | 
+13083 | Goyave | 80 | goyave | goyave | 
+13016 | Fruit de la passion (maracudja) | 20 | fruit (pulpe) | maracudja;maracuja;fruit de la passion | 
+13054 | Carambole | 90 | carambole | | 
+13036 | Pastèque | 300 | tranche | pasteque;melon d eau | 
+13026 | Melon | 200 | ½ melon | | 
+13021 | Kiwi | 75 | kiwi | | 
+13014 | Fraises | 15 | fraise | fraise | 
+13015 | Framboises | | | | 
+13028 | Myrtilles | | | | 
+13395 | Raisin | 5 | grain | raisin | 
+13043 | Pêche | 150 | pêche | | 
+13399 | Nectarine | 150 | nectarine | | 
+13000 | Abricot | 40 | abricot | | 
+13008 | Cerises | 7 | cerise | cerise | 
+13100 | Prune | 40 | prune | | 
+13023 | Litchi | 15 | litchi | litchis | 
+13018 | Grenade | 150 | ½ grenade | | 
+13012 | Figue fraîche | 50 | figue | | 
+13011 | Dattes sèches | 8 | datte | datte | 
+13046 | Raisins secs | 30 | poignée | | 
+13042 | Pruneaux | 10 | pruneau | | 
+13001 | Abricots secs | 8 | abricot | | 
+13038 | Compote de pomme | 100 | pot | compote | 
+13134 | Salade de fruits | 150 | portion | | 
+15006 | Noix de coco (chair fraîche) | 30 | morceau | noix de coco (chair);coco;noix de coco | 
+15007 | Noix de coco râpée (sèche) | 10 | c. à soupe | coco rape | 
+18011 | Eau de coco | 250 | verre | eau de coco | 
+18041 | Lait de coco | 100 | portion | lait de coco | 
+## Fruits à coque et graines
+15000 | Amandes | 1.2 | amande | amandes | 
+15001 | Cacahuètes | 1 | cacahuète | arachide;cacahuetes;pistaches de terre | 
+15002 | Cacahuètes grillées salées | 1 | cacahuète | | 
+15054 | Noix de cajou | 1.5 | noix | cajou | 
+15005 | Noix (cerneaux) | 5 | cerneau | noix | 
+15004 | Noisettes | 1 | noisette | | 
+15044 | Pistaches | 0.7 | pistache | | 
+15202 | Beurre de cacahuète | 15 | c. à soupe | pate d arachide;beurre d arachide | 
+## Produits laitiers
+19041 | Lait demi-écrémé | 250 | verre | lait demi-écrémé;lait;lait demi ecreme | 
+19023 | Lait entier | 250 | verre | lait entier | 
+19050 | Lait écrémé | 250 | verre | | 
+19027 | Lait concentré sucré | 20 | c. à soupe | lait concentre | 
+19026 | Lait concentré non sucré | 20 | c. à soupe | lait evapore | 
+19593 | Yaourt nature | 125 | yaourt | yaourt nature;yaourt;yogourt | F
+19599 | Yaourt nature sucré | 125 | yaourt | | F
+19594 | Yaourt nature 0% | 125 | yaourt | | F
+19587 | Yaourt aux fruits | 125 | yaourt | | F
+19575 | Yaourt aromatisé | 125 | yaourt | | F
+19552 | Yaourt à la grecque sur lit de fruits | 125 | pot | yaourt grec | F
+19508 | Yaourt à boire | 200 | bouteille | | F
+19646 | Fromage blanc 3% | 100 | portion | fromage blanc | 
+19644 | Fromage blanc 0% | 100 | portion | | 
+19865 | Kéfir de lait | 200 | verre | kefir;kéfir de lait | F
+39200 | Crème dessert chocolat | 125 | pot | creme dessert | 
+39206 | Mousse au chocolat | 60 | pot | | 
+39212 | Riz au lait | 125 | pot | | 
+19410 | Crème fraîche épaisse 30% | 15 | c. à soupe | creme fraiche | 
+19436 | Crème fraîche légère | 15 | c. à soupe | creme legere | 
+19417 | Crème liquide 30% | 15 | c. à soupe | creme liquide | 
+19420 | Crème chantilly | 10 | c. à soupe | chantilly | 
+## Fromages
+12115 | Emmental | 30 | portion | fromage (emmental);emmental;gruyere | 
+12118 | Emmental râpé | 10 | c. à soupe | fromage rape | 
+12110 | Comté | 30 | portion | | 
+12001 | Camembert | 30 | portion | | 
+12020 | Brie | 30 | portion | | 
+12735 | Mimolette | 30 | portion | | 
+12736 | Gouda | 30 | portion | | 
+12729 | Edam | 30 | portion | | 
+12726 | Cheddar | 20 | tranche | | 
+12120 | Parmesan | 10 | c. à soupe | | 
+19590 | Mozzarella | 125 | boule | | 
+12066 | Feta | 30 | portion | | 
+12500 | Roquefort | 30 | portion | | 
+12045 | Reblochon | 30 | portion | | 
+12749 | Raclette (fromage) | 40 | tranche | raclette | 
+12805 | Fromage de chèvre frais | 30 | portion | | 
+12812 | Chèvre bûche | 30 | rondelle | chevre | 
+12303 | Fromage fondu (portion) | 17 | portion | vache qui rit;fromage fondu | 
+12300 | Fromage fondu en tranche | 20 | tranche | | 
+12006 | Fromage affiné au lait cru (camembert lait cru) | 30 | portion | fromage affiné au lait cru | F
+## Matières grasses et sauces
+16400 | Beurre doux | 10 | noisette | beurre | 
+16402 | Beurre demi-sel | 10 | noisette | | 
+16601 | Margarine | 10 | noisette | | 
+17270 | Huile d'olive | 10 | c. à soupe | huile d'olive;huile olive | 
+17440 | Huile de tournesol | 10 | c. à soupe | huile;huile tournesol | 
+17130 | Huile de colza | 10 | c. à soupe | | 
+17040 | Huile d'arachide | 10 | c. à soupe | | 
+16040 | Huile de coco | 10 | c. à soupe | | 
+11054 | Mayonnaise | 15 | c. à soupe | mayo | 
+11110 | Vinaigrette | 15 | c. à soupe | sauce salade | 
+11008 | Ketchup | 15 | c. à soupe | | 
+11013 | Moutarde | 5 | c. à café | | 
+11104 | Sauce soja | 10 | c. à soupe | | 
+11100 | Sauce barbecue | 15 | c. à soupe | | 
+11101 | Sauce béchamel | 50 | portion | | 
+11114 | Sauce bolognaise | 100 | portion | | 
+11107 | Sauce tomate | 100 | portion | coulis de tomate | 
+11179 | Pesto | 15 | c. à soupe | | 
+11168 | Aïoli | 15 | c. à soupe | | 
+11203 | Sauce blanche kebab | 15 | c. à soupe | sauce blanche | 
+11187 | Sauce crudités | 15 | c. à soupe | | 
+13184 | Olives | 4 | olive | olive | 
+11004 | Cornichons | 10 | cornichon | | 
+## Sucré
+31016 | Sucre blanc | 5 | morceau | sucre;sucre en poudre | 
+31017 | Sucre roux / de canne | 5 | c. à café | sucre de canne;cassonade;sucre roux | 
+31008 | Miel | 10 | c. à café | | 
+31006 | Confiture | 15 | c. à soupe | confiture | 
+31032 | Pâte à tartiner chocolat-noisette | 15 | c. à soupe | nutella;pate a tartiner | 
+31005 | Chocolat noir | 10 | carré | chocolat noir | 
+31074 | Chocolat noir 70% | 10 | carré | | 
+31004 | Chocolat au lait | 10 | carré | chocolat | 
+31010 | Chocolat blanc | 10 | carré | | 
+31000 | Barre chocolatée biscuitée | 50 | barre | twix | 
+31001 | Barre chocolatée (type Mars/Snickers) | 50 | barre | mars;snickers;barre chocolatee | 
+31113 | Barre de céréales | 25 | barre | barre cereales | 
+31060 | Bonbons gélifiés | 5 | bonbon | bonbons;haribo | 
+31059 | Bonbons durs / sucettes | 5 | bonbon | | 
+31127 | Nougat | 30 | barre | | 
+15058 | Cacahuètes caramélisées (chouchous) | 30 | sachet | chouchou | 
+24015 | Petit-beurre | 8 | biscuit | biscuits;petit beurre | 
+24000 | Biscuits secs | 8 | biscuit | biscuit | 
+24684 | Cookie au chocolat | 15 | cookie | cookie;cookies | 
+24224 | Biscuit fourré chocolat (type Oreo) | 11 | biscuit | oreo | 
+24049 | Sablés / galettes au beurre | 8 | biscuit | sable | 
+24632 | Madeleine | 25 | madeleine | madeleines | 
+23585 | Gâteau au chocolat | 80 | part | gateau chocolat;brownie | 
+23588 | Gâteau au yaourt / cake | 60 | part | cake;gateau au yaourt | 
+23000 | Gâteau (moyenne) | 80 | part | gateau | 
+23594 | Génoise / gâteau moelleux | 60 | part | | 
+23490 | Tarte aux pommes | 120 | part | | 
+23485 | Tarte au citron | 120 | part | | 
+23498 | Tarte aux fruits | 120 | part | tarte | 
+23525 | Flan pâtissier | 120 | part | flan patissier | 
+23799 | Crêpe nature | 60 | crêpe | crepe;crepes | 
+23821 | Crêpe au chocolat | 80 | crêpe | crepe nutella | 
+23850 | Gaufre | 60 | gaufre | | 
+23827 | Pancake | 40 | pancake | pancakes | 
+23880 | Beignet / donut sucré | 60 | beignet | donut;beignet | 
+23952 | Muffin au chocolat | 75 | muffin | muffin | 
+23200 | Pain d'épices | 30 | tranche | | 
+39500 | Glace / crème glacée | 50 | boule | glace;creme glacee;sorbet | 
+39509 | Cornet de glace | 90 | cornet | | 
+39503 | Glace bâtonnet enrobé chocolat | 70 | bâtonnet | esquimau;magnum | 
+39526 | Glace à l'eau | 50 | bâtonnet | | 
+## Boissons
+18066 | Eau | 250 | verre | eau du robinet | 
+18044 | Eau minérale | 250 | verre | | 
+18018 | Soda cola | 330 | canette | coca;cola;coca cola | 
+18060 | Cola zéro / light | 330 | canette | coca zero;coca light | 
+18026 | Soda sucré (limonade, etc.) | 330 | canette | soda sucré;soda;sprite;fanta | 
+18049 | Soda aux fruits | 330 | canette | orangina | 
+18010 | Limonade | 250 | verre | | 
+18075 | Thé glacé sucré (ice tea) | 330 | canette | ice tea;the glace | 
+18058 | Sirop dilué dans l'eau | 250 | verre | sirop a l eau;sirop | 
+18017 | Sirop pur (à diluer) | 20 | dose | | 
+2070 | Jus d'orange | 200 | verre | jus d'orange;jus orange | 
+2074 | Jus de pomme | 200 | verre | | 
+2073 | Jus d'ananas | 200 | verre | | 
+2004 | Jus de fruits | 200 | verre | jus;jus de fruit | 
+2367 | Jus / nectar de goyave | 200 | verre | jus de goyave;nectar goyave | 
+2024 | Jus de maracudja (pur jus) | 200 | verre | jus de fruit de la passion;jus maracuja | 
+2365 | Nectar de maracudja | 200 | verre | jus de maracudja sucre | 
+2370 | Nectar de mangue | 200 | verre | jus de mangue | 
+2040 | Jus d'acérola (cerise pays) | 200 | verre | jus de cerise pays;acerola | 
+2031 | Jus de citron vert | 10 | c. à soupe | jus de citron;jus citron vert | 
+2500 | Smoothie | 250 | verre | | 
+18004 | Café noir | 150 | tasse | cafe | 
+18071 | Expresso | 40 | tasse | espresso | 
+18151 | Café au lait / cappuccino | 200 | tasse | cappuccino;cafe au lait | 
+18020 | Thé | 250 | tasse | the;tisane;infusion | 
+18104 | Chocolat chaud | 250 | tasse | chocolat chaud;cacao | 
+18113 | Boisson au soja | 250 | verre | lait de soja | 
+18111 | Boisson à l'amande | 250 | verre | lait d amande | 
+18025 | Kombucha | 250 | verre | kombucha | F
+5001 | Bière | 330 | canette | biere | 
+5002 | Bière forte | 330 | canette | | 
+5030 | Bière sans alcool | 330 | canette | | 
+5214 | Vin rouge | 125 | verre | vin | 
+5215 | Vin blanc | 125 | verre | | 
+5216 | Vin rosé | 125 | verre | | 
+5207 | Champagne | 125 | coupe | | 
+1004 | Rhum | 40 | verre (4 cl) | rhum agricole;rhum blanc;rhum vieux | 
+1005 | Whisky | 40 | verre (4 cl) | | 
+## Plats et snacks courants
+25516 | Pizza | 120 | part | pizza | 
+25404 | Pizza margherita | 120 | part | | 
+25548 | Pizza royale (jambon, fromage, champignons) | 120 | part | | 
+25405 | Quiche lorraine | 150 | part | quiche | 
+25081 | Lasagnes bolognaise | 300 | portion | lasagnes | 
+25085 | Pâtes bolognaise | 300 | assiette | spaghetti bolognaise | 
+25135 | Pâtes carbonara | 300 | assiette | carbonara | 
+25009 | Hachis parmentier | 300 | portion | | 
+25056 | Gratin dauphinois | 200 | portion | gratin | 
+25238 | Gratin de légumes | 200 | portion | | 
+25138 | Couscous au poulet | 350 | assiette | couscous | 
+25111 | Chili con carne | 300 | assiette | chili | 
+25088 | Riz cantonais | 300 | assiette | riz frit | 
+9085 | Nouilles sautées (bœuf/poulet/légumes) | 300 | assiette | nouilles | 
+25174 | Poulet curry coco | 300 | assiette | poulet curry;curry | 
+25001 | Blanquette de veau | 300 | assiette | | 
+25013 | Pot-au-feu | 350 | assiette | | 
+25204 | Tajine de poulet | 300 | assiette | tajine | 
+25414 | Cheeseburger | 120 | burger | cheeseburger | 
+25413 | Hamburger | 110 | burger | burger | 
+25502 | Burger au poulet | 150 | burger | | 
+25428 | Sandwich kebab | 350 | sandwich | kebab;grec | 
+25517 | Sandwich jambon-beurre | 200 | sandwich | jambon beurre | 
+25522 | Sandwich | 200 | sandwich | sandwich | 
+25647 | Wrap poulet | 200 | wrap | wrap | 
+25542 | Croque-madame | 200 | croque | | 
+25547 | Croque-monsieur | 150 | croque | croque monsieur | 
+25403 | Hot-dog | 120 | hot-dog | hot dog | 
+25438 | Samoussa / bouchée frite | 40 | samoussa | samoussa;samossa | 
+25456 | Sushi / maki | 25 | pièce | sushi;maki | 
+25608 | Taboulé | 150 | portion | taboule | 
+25606 | Salade de pommes de terre | 150 | portion | | 
+25614 | Salade de riz | 200 | portion | | 
+25628 | Salade César | 250 | portion | | 
+25969 | Soupe de légumes | 250 | bol | soupe;potage | 
+25904 | Soupe de poisson | 250 | bol | | 
+25551 | Beignet de viande ou poisson | 40 | beignet | | 
+9230 | Pop-corn salé | 30 | portion | pop corn | 
+## Fermentés et prébiotiques (suivi microbiote)
+X:20,3,1,0.1 | Choucroute crue | 100 | portion | choucroute | F
+X:25,3.5,1.5,0.5 | Kimchi | 50 | portion | | F
+20916 | Miso | 15 | c. à soupe | | F
+20917 | Tempeh | 100 | portion | | F
+X:90,20,1.1,0.3 | Banane peu mûre | 120 | banane | banane verte | P
+18152 | Chicorée soluble (poudre) | 3 | c. à café | chicoree | P

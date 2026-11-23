@@ -77,9 +77,9 @@ class FoodRecognitionTest {
 
     @Test fun traductionEtiquettes() {
         val rice = FoodLabels.map("White rice")
-        assertEquals("Riz blanc cuit", rice.name); assertEquals(130.0, rice.kcal100!!, 0.0); assertNotNull(rice.food)
+        assertEquals("Riz blanc cuit", rice.name); assertEquals(155.0, rice.kcal100!!, 0.0); assertNotNull(rice.food)
         val boudin = FoodLabels.map("Boudin")
-        assertEquals("Boudin créole", boudin.name); assertEquals(300.0, boudin.kcal100!!, 0.0)
+        assertEquals("Boudin créole", boudin.name); assertEquals(231.0, boudin.kcal100!!, 0.0) // Ciqual 2025 (boudin antillais)
         val pizza = FoodLabels.map("Pepperoni")
         assertEquals("Pizza pepperoni", pizza.name); assertNull(pizza.food)
         val soup = FoodLabels.map("Lettuce soup")

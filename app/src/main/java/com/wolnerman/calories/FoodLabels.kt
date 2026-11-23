@@ -175,7 +175,7 @@ object FoodLabels {
     fun map(label: String, foods: List<Food> = BUILTIN_FOODS): Mapped {
         val l = label.trim()
         TABLE[l]?.let { (fr, kcal) ->
-            val local = foods.firstOrNull { fold(it.name) == fold(fr) }
+            val local = foodByName(fr, foods)
             return Mapped(fr, (local?.kcalPer100g ?: kcal).toDouble(), local, true)
         }
         // Mots entiers seulement (« pie » ne doit pas correspondre à « pierogi »), pluriel en -s accepté
@@ -183,7 +183,7 @@ object FoodLabels {
         KEYWORDS.firstOrNull { padded.contains(" ${it.first} ") || padded.contains(" ${it.first}s ") }?.let { (_, fr, kcal) ->
             return Mapped("$fr ($l)", kcal.toDouble(), null, true)
         }
-        val local = foods.firstOrNull { fold(it.name) == fold(l) }
+        val local = foodByName(l, foods)
         return Mapped(l, local?.kcalPer100g?.toDouble(), local, false)
     }
 }

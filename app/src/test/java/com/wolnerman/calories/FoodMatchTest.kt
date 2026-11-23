@@ -11,14 +11,15 @@ class FoodMatchTest {
     @Test fun rizSeulDonneRizBlanc() = assertEquals("Riz blanc cuit", findFood("riz")?.name)
     @Test fun exactPrefereAuPartiel() = assertEquals("Banane", findFood("banane")?.name)
     @Test fun accentsEtLigatures() {
-        assertEquals("Œuf", findFood("oeuf")?.name)
+        assertEquals("Œuf entier (cru)", findFood("oeuf")?.name)
         assertEquals("Pâtes complètes cuites", findFood("pates completes")?.name)
-        assertEquals("Dachine / madère cuite", findFood("madere")?.name)
+        assertEquals("Dachine / madère (taro) cuit", findFood("madere")?.name)
         assertEquals("Christophine cuite", findFood("christophine")?.name)
     }
     @Test fun contientUnMot() {
-        assertEquals("Blanc de poulet cuit", findFood("poulet")?.name)
-        assertEquals("Accras de morue", findFood("acras")?.name ?: findFood("accras")?.name)
+        assertEquals("Blanc de poulet grillé", findFood("poulet")?.name)
+        assertEquals("Accras de morue / de poisson", findFood("acras")?.name)
+        assertEquals("Accras de morue / de poisson", findFood("accras")?.name)
     }
     @Test fun inconnuOuTropCourt() {
         assertNull(findFood("xyzzy"))
@@ -39,7 +40,7 @@ class FoodMatchTest {
     }
     @Test fun virguleFrancaise() = assertEquals(12.5, parseNum("12,5")!!, 0.0)
     @Test fun toutesLesValeursIntegreesCompletes() {
-        BUILTIN_FOODS.forEach { assertEquals("nutriments manquants : ${it.name}", NUTRIENTS.size, it.nutrients.size) }
+        BUILTIN_FOODS.forEach { f -> f.nutrients.keys.forEach { k -> assertTrue("clé inconnue $k", NUTRIENTS.any { it.key == k }) } }
         assertEquals(BUILTIN_FOODS.size, BUILTIN_FOODS.map { fold(it.name) }.toSet().size)
     }
     @Test fun suggestions() {

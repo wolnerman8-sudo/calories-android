@@ -78,7 +78,7 @@ object GeminiParser {
             val kcal = num(o, "kcal_pour_100g", "kcal_100g", "kcal")?.takeIf { it >= 0 && it <= 950 }
             out += FoodGuess(name.replaceFirstChar { it.uppercase() }, grams?.let { Math.round(it).toDouble() }, kcal,
                 confidence(o.opt("confiance") ?: o.opt("confidence")), offline = false,
-                food = BUILTIN_FOODS.firstOrNull { fold(it.name) == fold(name) })
+                food = foodByName(name))
         }
         return out.sortedByDescending { it.confidence }
     }

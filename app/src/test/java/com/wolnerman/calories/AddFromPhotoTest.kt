@@ -53,8 +53,8 @@ class AddFromPhotoTest {
         assertEquals(130.5, riz.kcal100!!, 1e-9)
         val f = fillFromGuess(riz, null)
         assertNotNull(f.food)                 // valeurs + macros de la base intégrée
-        assertEquals("130", f.kcal100)
-        assertEquals("28", f.carbs100)
+        assertEquals("155", f.kcal100)   // Ciqual 2025 : riz blanc cuit
+        assertEquals("33.2", f.carbs100)
         assertNull(addProblem(f.name, f.grams, f.kcal100))
     }
 
@@ -65,7 +65,7 @@ class AddFromPhotoTest {
         val f = fillFromGuess(sauce, null)
         assertTrue(f.kcalMissing)
         val why = addProblem(f.name, f.grams, f.kcal100)!!
-        assertTrue(why.startsWith("kcal inconnues pour « Sauce maison »"))
+        assertTrue(why.startsWith("Calories inconnues pour « Sauce maison »"))
     }
 
     @Test fun quantiteToujoursRemplie() {

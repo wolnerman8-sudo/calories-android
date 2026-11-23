@@ -21,6 +21,11 @@ class SecureSettings(ctx: Context) {
         get() = prefs.getBoolean("enabled", true)
         set(v) { prefs.edit().putBoolean("enabled", v).apply() }
 
+    /** Partage du journal avec Santé Connect (v1.8), désactivé par défaut. */
+    var healthEnabled: Boolean
+        get() = prefs.getBoolean("health_enabled", false)
+        set(v) { prefs.edit().putBoolean("health_enabled", v).apply() }
+
     fun hasKey(): Boolean = prefs.contains("gemini_key")
 
     fun saveKey(key: String) {

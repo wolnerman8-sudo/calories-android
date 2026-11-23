@@ -89,6 +89,16 @@ fun CaloriesApp(storage: Storage) {
     var toDelete by remember { mutableStateOf<Entry?>(null) }
 
     fun update(newList: List<Entry>) { entries = newList; storage.saveEntries(newList) }
+    val appCtx = LocalContext.current.applicationContext
+    val hcScope = rememberCoroutineScope()
+    /** Santé Connect (si activé) : écrit les entrées ajoutées, supprime les entrées retirées. */
+    fun syncHealth(added: List<Entry> = emptyList(), removed: List<Entry> = emptyList()) {
+        if (!SecureSettings(appCtx).healthEnabled) return
+        hcScope.launch {
+            if (added.isNotEmpty()) HealthSync.write(appCtx, added)
+            if (removed.isNotEmpty()) HealthSync.delete(appCtx, removed)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -116,10 +126,10 @@ fun CaloriesApp(storage: Storage) {
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
             if (tab == 0) TodayScreen(entries, goal,
-                onAdd = { update(entries + it) }, onDelete = { toDelete = it })
+                onAdd = { update(entries + it); syncHealth(added = listOf(it)) }, onDelete = { toDelete = it })
             else if (tab == 1) HistoryScreen(entries, goal, onDelete = { toDelete = it })
             else if (tab == 3) NutrientsScreen(entries, goal, storage.loadProfile().male)
-            else ProfileScreen(storage, goal, onUseGoal = { goal = it; storage.dailyGoal = it })
+            else ProfileScreen(storage, goal, entries, onUseGoal = { goal = it; storage.dailyGoal = it })
         }
     }
 
@@ -148,7 +158,7 @@ fun CaloriesApp(storage: Storage) {
             onDismissRequest = { toDelete = null },
             title = { Text("Supprimer ?") },
             text = { Text("${e.name} — ${e.kcal} kcal") },
-            confirmButton = { TextButton(onClick = { Photos.delete(e.photo); update(entries.filter { it.id != e.id }); toDelete = null }) { Text("Supprimer") } },
+            confirmButton = { TextButton(onClick = { Photos.delete(e.photo); update(entries.filter { it.id != e.id }); syncHealth(removed = listOf(e)); toDelete = null }) { Text("Supprimer") } },
             dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Annuler") } }
         )
     }
@@ -512,7 +522,7 @@ fun HistoryScreen(entries: List<Entry>, goal: Int, onDelete: (Entry) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(storage: Storage, goal: Int, onUseGoal: (Int) -> Unit) {
+fun ProfileScreen(storage: Storage, goal: Int, entries: List<Entry>, onUseGoal: (Int) -> Unit) {
     val initial = remember { storage.loadProfile() }
     fun numTxt(d: Double?) = d?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() } ?: ""
     var age by remember { mutableStateOf(initial.age?.toString() ?: "") }
@@ -592,6 +602,7 @@ fun ProfileScreen(storage: Storage, goal: Int, onUseGoal: (Int) -> Unit) {
                 }
             }
         }
+        item { HealthConnectCard(entries) { kg -> weight = fmt(kg) } }
         item { RecognitionSettingsCard() }
     }
 }

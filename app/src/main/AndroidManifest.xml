@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Santé Connect requiert Android 8+ côté bibliothèque ; l'appli vérifie la version avant tout appel (v1.8) -->
+    <uses-sdk tools:overrideLibrary="androidx.health.connect.client" />
+    <uses-permission android:name="android.permission.health.WRITE_NUTRITION" />
+    <uses-permission android:name="android.permission.health.READ_NUTRITION" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Balance de cuisine Bluetooth LE (v1.3) -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
@@ -32,5 +42,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Écran de confidentialité Santé Connect (Android 13 et moins) -->
+        <activity android:name=".HealthPrivacyActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+        <!-- Même écran pour Android 14+ -->
+        <activity-alias android:name="ViewPermissionUsageActivity" android:exported="true"
+            android:targetActivity=".HealthPrivacyActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
     </application>
 </manifest>

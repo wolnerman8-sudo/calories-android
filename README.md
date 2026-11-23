@@ -84,6 +84,17 @@ Architecture de pilotes (`ScaleDrivers.kt`) : détection automatique d'après l'
   La clé est chiffrée (AES-256-GCM, clé dans l'Android Keystore) et n'est jamais dans le code ni dans ce dépôt.
   Offre gratuite : Google peut utiliser les photos envoyées pour améliorer ses produits.
 
+## Santé Connect (v1.8)
+
+- Onglet **Profil › Santé Connect** : interrupteur **« Partager avec Santé Connect »** (désactivé par défaut). Un écran explique
+  les données partagées, puis Santé Connect demande les autorisations (écriture/lecture Nutrition, lecture Poids et Pas).
+- Chaque entrée du journal devient un `NutritionRecord` (énergie, glucides/protéines/lipides si connus, nom + grammes, type de repas
+  selon l'heure, `clientRecordId = calories-<id>`). Supprimer une entrée la supprime aussi dans Santé Connect. Bouton « Resynchroniser le journal ».
+- Affiche le dernier poids (90 jours) et les pas du jour ; « Utiliser ce poids dans mon profil ».
+- Android 9 à 13 : si Santé Connect n'est pas installé, bouton « Installer Santé Connect » (Play Store). Android 14+ : intégré au système.
+- Écran de confidentialité exigé par Santé Connect : `HealthPrivacyActivity` (`ACTION_SHOW_PERMISSIONS_RATIONALE` + alias `VIEW_PERMISSION_USAGE`).
+- Bibliothèque `androidx.health.connect:connect-client:1.1.0-alpha07` (dernière compatible compileSdk 34).
+
 ## Installer sur ton Samsung (APK)
 
 1. Télécharge `Calories-v1.0.apk` sur le téléphone.

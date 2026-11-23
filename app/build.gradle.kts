@@ -18,8 +18,8 @@ android {
         applicationId = "com.wolnerman.calories"
         minSdk = 24
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.7"
+        versionCode = 9
+        versionName = "1.8"
         // Téléphones ARM uniquement (le moteur TFLite pèse ~3-6 Mo par architecture)
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
@@ -75,6 +75,8 @@ dependencies {
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    // Santé Connect : 1.1.0-alpha07 = dernière version compatible compileSdk 34 / AGP 8.5 (les suivantes exigent SDK 35-36)
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha07")
     implementation("com.google.ai.edge.litert:litert:1.4.2") // reconnaissance hors-ligne (Interpreter TFLite)
     implementation("com.github.elinkthings:AILinkSecretAndroid:2.0.0") { isTransitive = false }
 }

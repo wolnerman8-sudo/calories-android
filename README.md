@@ -1,6 +1,6 @@
 # Calories — calculateur de calories Android
 
-Version actuelle : **2.0** (versionCode 11). Historique : 1.0 → première version ; 1.1 → suivi des prébiotiques ; 1.2 → correction du calcul des calories (remplissage automatique), aperçu en direct, 29 aliments en plus (dont plats et produits des Antilles), mise en page corrigée.
+Version actuelle : **2.1** (versionCode 12). Historique : 1.0 → première version ; 1.1 → suivi des prébiotiques ; 1.2 → correction du calcul des calories (remplissage automatique), aperçu en direct, 29 aliments en plus (dont plats et produits des Antilles), mise en page corrigée.
 
 Application Android simple, **hors ligne et sans compte**, pour noter ce que tu manges et suivre tes calories de la journée.
 

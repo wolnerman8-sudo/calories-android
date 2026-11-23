@@ -89,7 +89,7 @@ object GeminiParser {
             val v = o.opt(k)
             val d = when (v) {
                 is Number -> v.toDouble()
-                is String -> Regex("-?\\d+(?:[.,]\\d+)?").find(v)?.value?.replace(',', '.')?.toDoubleOrNull()
+                is String -> parseLooseNumber(v)
                 else -> null
             }
             if (d != null && !d.isNaN()) return d

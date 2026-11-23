@@ -39,6 +39,8 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import java.text.Normalizer
 import java.time.LocalDate
 import java.time.LocalTime
@@ -95,10 +97,20 @@ fun CaloriesApp(storage: Storage) {
     val hcScope = rememberCoroutineScope()
     /** Santé Connect (si activé) : écrit les entrées ajoutées, supprime les entrées retirées. */
     fun syncHealth(added: List<Entry> = emptyList(), removed: List<Entry> = emptyList()) {
-        if (!SecureSettings(appCtx).healthEnabled) return
+        if (runCatching { !SecureSettings(appCtx).healthEnabled }.getOrDefault(true)) return
+        // Jamais bloquant : l'entrée est déjà enregistrée ; un échec Santé Connect donne juste un avis discret
         hcScope.launch {
-            if (added.isNotEmpty()) HealthSync.write(appCtx, added)
-            if (removed.isNotEmpty()) HealthSync.delete(appCtx, removed)
+            try {
+                val err = listOfNotNull(
+                    if (added.isNotEmpty()) HealthSync.write(appCtx, added).exceptionOrNull() else null,
+                    if (removed.isNotEmpty()) HealthSync.delete(appCtx, removed).exceptionOrNull() else null,
+                ).firstOrNull()
+                if (err != null) {
+                    android.util.Log.w("Calories", "Santé Connect", err)
+                    android.widget.Toast.makeText(appCtx, "Santé Connect : non synchronisé (${err.message ?: "erreur"}). " +
+                        "L'aliment est bien dans ton journal.", android.widget.Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Throwable) { android.util.Log.w("Calories", "Santé Connect", e) }
         }
     }
 
@@ -205,7 +217,7 @@ fun SummaryCard(total: Int, goal: Int, macros: Macros) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun AddEntryCard(onAdd: (Entry) -> Unit) {
     var name by remember { mutableStateOf("") }
@@ -231,6 +243,11 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
     var photoPath by remember { mutableStateOf<String?>(null) }
     var pendingCameraPath by rememberSaveable { mutableStateOf<String?>(null) }
     var photoBusy by remember { mutableStateOf(false) }
+    var filledNote by remember { mutableStateOf<String?>(null) }   // bandeau vert après remplissage par la photo
+    var addError by remember { mutableStateOf<String?>(null) }     // raison rouge après un appui sur « Ajouter »
+    var addNotice by remember { mutableStateOf<String?>(null) }    // avis non bloquant (photo…)
+    val formTop = remember { BringIntoViewRequester() }
+    val addRow = remember { BringIntoViewRequester() }
 
     fun setPhoto(newPath: String?) { if (photoPath != newPath) Photos.delete(photoPath); photoPath = newPath }
 
@@ -314,12 +331,8 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
     val g = parseNum(grams)
     val k = parseNum(kcal100)
     val calc = calculate(g, k, parseNum(carbs100), parseNum(prot100), parseNum(fat100))
-    val problem: String? = when {
-        name.isBlank() -> "Saisis ou choisis un aliment."
-        k == null -> "Aliment inconnu : saisis les kcal pour 100 g ou scanne le code-barres."
-        g == null || g <= 0 -> "Indique la quantité en grammes."
-        else -> null
-    }
+    // v2.1 : chaque refus a une raison affichée (addProblem couvre tous les cas où calc serait null)
+    val problem: String? = addProblem(name, grams, kcal100) ?: if (calc == null) "Valeurs invalides : vérifie quantité et kcal." else null
     val valid = problem == null && calc != null
 
     Card(Modifier.fillMaxWidth()) {
@@ -348,10 +361,16 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     }
                 }
             }
-            ExposedDropdownMenuBox(expanded = expanded && suggestions.isNotEmpty(), onExpandedChange = { expanded = it }) {
+            filledNote?.let {
+                Surface(color = Color(0xFFE8F5E9), shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
+                    Text(it, Modifier.padding(8.dp), style = MaterialTheme.typography.bodySmall, color = Color(0xFF1B5E20), fontWeight = FontWeight.SemiBold)
+                }
+            }
+            ExposedDropdownMenuBox(expanded = expanded && suggestions.isNotEmpty(), onExpandedChange = { expanded = it },
+                modifier = Modifier.bringIntoViewRequester(formTop)) {
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { onNameChange(it); expanded = true },
+                    onValueChange = { onNameChange(it); expanded = true; addError = null },
                     label = { Text("Aliment (liste ou saisie libre)") },
                     singleLine = true,
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
@@ -372,10 +391,14 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(grams, { grams = it.take(6) }, label = { Text("Quantité g", maxLines = 1) }, singleLine = true,
+                OutlinedTextField(grams, { grams = it.take(8); addError = null }, label = { Text("Quantité g", maxLines = 1) }, singleLine = true,
+                    isError = name.isNotBlank() && (g == null || g <= 0),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
-                OutlinedTextField(kcal100, { kcal100 = it.take(6); autoFrom = null }, label = { Text("kcal/100 g", maxLines = 1) }, singleLine = true,
-                    isError = name.isNotBlank() && k == null,
+                OutlinedTextField(kcal100, { kcal100 = it.take(8); autoFrom = null; addError = null }, label = { Text("kcal/100 g", maxLines = 1) }, singleLine = true,
+                    isError = name.isNotBlank() && (k == null || k < 0),
+                    supportingText = if (name.isNotBlank() && kcal100.isBlank()) {
+                        { Text("kcal inconnues : saisis-les", color = Color(0xFFC62828)) }
+                    } else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
             }
             ScalePanel(onUse = { w -> grams = fmt(Math.round(w * 10.0) / 10.0) })
@@ -442,34 +465,60 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     TextButton(onClick = { setPhoto(null) }) { Text("Retirer") }
                 }
             }
-            RecognitionPanel(photoPath) { g ->
+            RecognitionPanel(photoPath) { guess ->
                 // Remplit le formulaire (sans rien ajouter au journal : l'utilisateur confirme avec « Ajouter »)
-                scanned = null; scanMsg = null
-                if (g.food != null) fillFood(g.food) else {
-                    clearAuto()
-                    g.kcal100?.let { kcal100 = fmt(Math.round(it).toDouble()) }
-                }
-                name = g.name
-                // Quantité : balance connectée et stable en priorité, sinon estimation de Gemini
                 val r = ScaleManager.get(context).let { m -> if (m.status == ScaleStatus.CONNECTED) m.reading else null }
                 val scaleG = r?.grams?.takeIf { r.stable && it > 0 }
-                when {
-                    scaleG != null -> grams = fmt(Math.round(scaleG * 10.0) / 10.0)
-                    g.grams != null -> grams = fmt(g.grams)
+                val f = fillFromGuess(guess, scaleG)
+                scanned = null; scanMsg = null; addError = null; expanded = false
+                if (f.food != null) fillFood(f.food) else {
+                    clearAuto()
+                    kcal100 = f.kcal100; carbs100 = f.carbs100; prot100 = f.prot100; fat100 = f.fat100
                 }
+                name = f.name
+                grams = f.grams
+                filledNote = "✓ Rempli par la photo : ${f.name} · ${f.grams} g (${f.gramsSource})" +
+                    (if (f.kcalMissing) " · kcal inconnues, saisis-les" else " · ${kcal100} kcal/100 g") +
+                    ". Vérifie puis touche « Ajouter »."
+                scope.launch { runCatching { formTop.bringIntoView() } }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(if (calc != null) "= ${calc.kcal} kcal" else (problem ?: ""),
                     style = if (calc != null) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodySmall,
                     color = if (calc != null) Color.Unspecified else Color(0xFFC62828), modifier = Modifier.weight(1f))
-                Button(enabled = valid, onClick = {
-                    onAdd(Entry(System.currentTimeMillis(), today(), nowTime(), name.trim(), g!!, k!!, photoPath,
-                        parseNum(carbs100)?.takeIf { it >= 0 }, parseNum(prot100)?.takeIf { it >= 0 }, parseNum(fat100)?.takeIf { it >= 0 },
-                        nutr = nutrTxt.mapNotNull { (k, v) -> parseNum(v)?.takeIf { it >= 0 }?.let { k to it } }.toMap(),
-                        fermented = fermented, prebiotic = prebiotic))
+                // v2.1 : toujours cliquable ; ajoute, ou affiche la raison en rouge
+                Button(onClick = {
+                    if (!valid) {
+                        addError = problem ?: "Impossible d'ajouter : vérifie le formulaire."
+                        scope.launch { runCatching { formTop.bringIntoView() } }
+                        return@Button
+                    }
+                    val photo = photoPath?.takeIf { p -> runCatching { File(p).exists() }.getOrDefault(false) }
+                    if (photoPath != null && photo == null) addNotice = "Photo introuvable : aliment ajouté sans photo."
+                    val entry = try {
+                        Entry(System.currentTimeMillis(), today(), nowTime(), name.trim(), g!!, k!!, photo,
+                            parseNum(carbs100)?.takeIf { it >= 0 }, parseNum(prot100)?.takeIf { it >= 0 }, parseNum(fat100)?.takeIf { it >= 0 },
+                            nutr = nutrTxt.mapNotNull { (key, v) -> parseNum(v)?.takeIf { it >= 0 }?.let { key to it } }.toMap(),
+                            fermented = fermented, prebiotic = prebiotic)
+                    } catch (e: Exception) {
+                        android.util.Log.e("Calories", "Entrée invalide", e)
+                        addError = "Impossible d'ajouter : ${e.message ?: e.javaClass.simpleName}"; return@Button
+                    }
+                    try { onAdd(entry) } catch (e: Exception) {
+                        android.util.Log.e("Calories", "Ajout au journal", e)
+                        addError = "Impossible d'enregistrer : ${e.message ?: e.javaClass.simpleName}"; return@Button
+                    }
                     photoPath = null
                     name = ""; grams = "100"; kcal100 = ""; carbs100 = ""; prot100 = ""; fat100 = ""; nutrTxt.clear(); fermented = false; prebiotic = false; barcode = ""; scanned = null; scanMsg = null; autoFrom = null
-                }) { Text("Ajouter") }
+                    filledNote = null; addError = null
+                    addNotice = (addNotice?.let { "$it " } ?: "") + "✓ Ajouté : ${entry.name} (${entry.kcal} kcal)."
+                }, modifier = Modifier.bringIntoViewRequester(addRow),
+                    colors = if (valid) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColors(containerColor = Color(0xFF9E9E9E))) { Text("Ajouter") }
+            }
+            addError?.let { Text(it, color = Color(0xFFC62828), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold) }
+            addNotice?.let {
+                Text(it, color = Color(0xFF2E7D32), style = MaterialTheme.typography.bodySmall)
+                LaunchedEffect(it) { kotlinx.coroutines.delay(6000); addNotice = null }
             }
         }
     }

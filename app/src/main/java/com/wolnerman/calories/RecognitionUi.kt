@@ -61,8 +61,10 @@ catch (e: Exception) { false to "❌ ${e.message ?: e.javaClass.simpleName}" }
 
 /**
  * Bloc « Reconnaître l'aliment » sous la photo. Lance automatiquement la reconnaissance pour chaque nouvelle photo
- * quand le réglage est actif. Un appui sur une suggestion remplit le formulaire ; l'ajout reste à confirmer (« Ajouter »).
+ * quand le réglage est actif, remplit le formulaire avec la meilleure suggestion (v2.1) ; un appui sur une autre
+ * suggestion la remplace. L'ajout au journal reste à confirmer avec « Ajouter ».
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecognitionPanel(photoPath: String?, onPick: (FoodGuess) -> Unit) {
     val ctx = LocalContext.current
@@ -71,13 +73,17 @@ fun RecognitionPanel(photoPath: String?, onPick: (FoodGuess) -> Unit) {
     val scope = rememberCoroutineScope()
     var busy by remember(photoPath) { mutableStateOf(false) }
     var result by remember(photoPath) { mutableStateOf<RecoResult?>(null) }
-    var picked by remember(photoPath) { mutableStateOf<String?>(null) }
+    var picked by remember(photoPath) { mutableStateOf<Int?>(null) }
+    val pick by rememberUpdatedState(onPick)
     fun run() {
         if (busy) return
         busy = true; result = null; picked = null
         scope.launch {
-            result = withContext(Dispatchers.IO) { recognizeFood(ctx, photoPath) }
+            val r = withContext(Dispatchers.IO) { recognizeFood(ctx, photoPath) }
+            result = r
             busy = false
+            // v2.1 : la meilleure suggestion remplit tout de suite le formulaire (l'ajout reste à confirmer)
+            if (r.guesses.isNotEmpty()) { picked = 0; pick(r.guesses[0]) }
         }
     }
     LaunchedEffect(photoPath) { run() } // automatique pour chaque nouvelle photo
@@ -90,28 +96,34 @@ fun RecognitionPanel(photoPath: String?, onPick: (FoodGuess) -> Unit) {
         result?.let { r ->
             r.message?.let { Text(it.trim(), style = MaterialTheme.typography.bodySmall, color = Color(0xFFB26A00)) }
             if (r.guesses.isNotEmpty()) {
-                Text("Suggestions (${r.source}) — touche la bonne :", style = MaterialTheme.typography.labelLarge)
-                r.guesses.forEach { g ->
-                    val sel = picked == g.name
+                Text("Suggestions (${r.source}) — la 1re est déjà dans le formulaire ; touche une autre pour la remplacer :",
+                    style = MaterialTheme.typography.labelLarge)
+                r.guesses.forEachIndexed { i, g ->
+                    val sel = picked == i
+                    // Carte entièrement cliquable (Surface onClick : zone tactile = toute la carte, effet visuel au toucher)
                     Surface(
-                        tonalElevation = if (sel) 6.dp else 1.dp, shape = MaterialTheme.shapes.small,
-                        color = if (sel) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.fillMaxWidth().clickable { picked = g.name; onPick(g) }
+                        onClick = { picked = i; pick(g) },
+                        shape = MaterialTheme.shapes.small,
+                        color = if (sel) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                        border = if (sel) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Column(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                            Text((if (sel) "✓ " else "") + g.name, fontWeight = FontWeight.SemiBold)
-                            val parts = buildList {
-                                g.grams?.let { add("~${fmt(it)} g") }
-                                add(g.kcal100?.let { "${Math.round(it)} kcal/100 g" } ?: "kcal inconnues")
-                                add("confiance ${Math.round(g.confidence * 100)} %")
-                                if (g.offline) add("hors-ligne, moins précis")
+                        Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text((if (sel) "✓ " else "") + g.name, fontWeight = FontWeight.SemiBold)
+                                val parts = buildList {
+                                    g.grams?.let { add("~${fmt(it)} g") }
+                                    add(g.kcal100?.let { "${Math.round(it)} kcal/100 g" } ?: "kcal inconnues")
+                                    add("confiance ${Math.round(g.confidence * 100)} %")
+                                    if (g.offline) add("hors-ligne, moins précis")
+                                }
+                                Text(parts.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
                             }
-                            Text(parts.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            Text(if (sel) "Choisi" else "Choisir", style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
-                if (picked != null) Text("Vérifie le nom, la quantité et les kcal, puis touche « Ajouter ».",
-                    style = MaterialTheme.typography.bodySmall, color = Color(0xFF2E7D32))
             }
         }
     }

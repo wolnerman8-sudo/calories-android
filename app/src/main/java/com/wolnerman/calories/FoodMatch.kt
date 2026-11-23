@@ -46,5 +46,5 @@ fun calculate(grams: Double?, kcal100: Double?, carbs100: Double? = null, prot10
     return Calc((kcal100 * f).roundToInt(), carbs100?.let { it * f }, prot100?.let { it * f }, fat100?.let { it * f })
 }
 
-/** Lit un nombre saisi au clavier français ou anglais (« 12,5 » ou « 12.5 »). */
-fun parseNum(s: String): Double? = s.trim().replace(',', '.').toDoubleOrNull()
+/** Lit un nombre saisi au clavier français ou anglais (« 12,5 », « 12.5 », « 150 g », « 1 200 »). */
+fun parseNum(s: String): Double? = s.trim().replace(',', '.').toDoubleOrNull() ?: parseLooseNumber(s)

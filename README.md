@@ -95,6 +95,15 @@ Architecture de pilotes (`ScaleDrivers.kt`) : détection automatique d'après l'
 - Écran de confidentialité exigé par Santé Connect : `HealthPrivacyActivity` (`ACTION_SHOW_PERMISSIONS_RATIONALE` + alias `VIEW_PERMISSION_USAGE`).
 - Bibliothèque `androidx.health.connect:connect-client:1.1.0-alpha07` (dernière compatible compileSdk 34).
 
+## OpenAI pour la reconnaissance photo (v1.9)
+
+- Gemini / Google AI Studio n'est pas disponible en Guadeloupe ni en Martinique ; **OpenAI** (où ces territoires sont pris en charge) devient le service en ligne par défaut.
+- Profil › **Reconnaissance par photo** › *Service en ligne* : « OpenAI (recommandé) » ou « Gemini (non disponible aux Antilles) ».
+  Une clé par service, chiffrée (AES-GCM, Android Keystore) : « Coller la clé API OpenAI », « Enregistrer la clé », « Effacer la clé », « Voir ».
+- Chat Completions (`/v1/chat/completions`), image JPEG 768 px en data URL base64, sortie `json_schema` stricte (même schéma `aliments`).
+  Modèles : `gpt-6-luna` (raisonnement `low`), puis `gpt-5.4-nano`, puis `gpt-4.1-mini` si le modèle est introuvable (404 / `model_not_found`).
+- Hors-ligne (AIY Food V1) et Santé Connect inchangés.
+
 ## Installer sur ton Samsung (APK)
 
 1. Télécharge `Calories-v1.0.apk` sur le téléphone.

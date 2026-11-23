@@ -26,18 +26,25 @@ class SecureSettings(ctx: Context) {
         get() = prefs.getBoolean("health_enabled", false)
         set(v) { prefs.edit().putBoolean("health_enabled", v).apply() }
 
-    fun hasKey(): Boolean = prefs.contains("gemini_key")
+    /** Fournisseur en ligne choisi : « openai » (défaut, v1.9) ou « gemini ». */
+    var provider: String
+        get() = prefs.getString("provider", PROVIDER_OPENAI) ?: PROVIDER_OPENAI
+        set(v) { prefs.edit().putString("provider", v).apply() }
 
-    fun saveKey(key: String) {
+    private fun pref(p: String) = if (p == PROVIDER_GEMINI) "gemini_key" else "openai_key"
+
+    fun hasKey(p: String = provider): Boolean = prefs.contains(pref(p))
+
+    fun saveKey(key: String, p: String = provider) {
         val c = Cipher.getInstance("AES/GCM/NoPadding")
         c.init(Cipher.ENCRYPT_MODE, secret())
         val enc = c.doFinal(key.trim().toByteArray(Charsets.UTF_8))
         val blob = c.iv + enc
-        prefs.edit().putString("gemini_key", Base64.encodeToString(blob, Base64.NO_WRAP)).apply()
+        prefs.edit().putString(pref(p), Base64.encodeToString(blob, Base64.NO_WRAP)).apply()
     }
 
-    fun loadKey(): String? = try {
-        prefs.getString("gemini_key", null)?.let { s ->
+    fun loadKey(p: String = provider): String? = try {
+        prefs.getString(pref(p), null)?.let { s ->
             val blob = Base64.decode(s, Base64.NO_WRAP)
             val c = Cipher.getInstance("AES/GCM/NoPadding")
             c.init(Cipher.DECRYPT_MODE, secret(), GCMParameterSpec(128, blob, 0, 12))
@@ -46,9 +53,9 @@ class SecureSettings(ctx: Context) {
     } catch (e: Exception) { null } // clé Keystore perdue (restauration…) : il faudra la recoller
 
     /** 4 derniers caractères pour l'affichage (« ••••abcd »). */
-    fun keyHint(): String? = loadKey()?.takeLast(4)?.let { "••••$it" }
+    fun keyHint(p: String = provider): String? = loadKey(p)?.takeLast(4)?.let { "••••$it" }
 
-    fun clearKey() { prefs.edit().remove("gemini_key").apply() }
+    fun clearKey(p: String = provider) { prefs.edit().remove(pref(p)).apply() }
 
     private fun secret(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -61,5 +68,9 @@ class SecureSettings(ctx: Context) {
         return gen.generateKey()
     }
 
-    companion object { private const val ALIAS = "calories_gemini_key" }
+    companion object {
+        private const val ALIAS = "calories_gemini_key" // nom historique (v1.7), sert pour toutes les clés
+        const val PROVIDER_OPENAI = "openai"
+        const val PROVIDER_GEMINI = "gemini"
+    }
 }

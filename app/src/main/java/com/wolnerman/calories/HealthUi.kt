@@ -145,7 +145,7 @@ class HealthPrivacyActivity : ComponentActivity() {
                         Text("Calories — confidentialité et Santé Connect", style = MaterialTheme.typography.titleLarge)
                         Text(HC_EXPLAIN)
                         Text("Calories n'a pas de compte ni de serveur : le journal, le profil et les photos sont stockés uniquement sur le téléphone. " +
-                            "Seule exception, si tu l'actives : la reconnaissance photo envoie la photo réduite à Google Gemini avec ta propre clé API.",
+                            "Seule exception, si tu l'actives : la reconnaissance photo envoie la photo réduite au service choisi (OpenAI ou Google Gemini) avec ta propre clé API.",
                             style = MaterialTheme.typography.bodyMedium)
                         Button(onClick = { finish() }) { Text("Fermer") }
                     }

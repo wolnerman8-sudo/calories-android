@@ -109,8 +109,11 @@ object GeminiParser {
     }
 }
 
-/** Erreurs Gemini, avec message en français pour l'utilisateur. */
-sealed class GeminiError(val userMessage: String) : Exception(userMessage) {
+/** Erreur d'un fournisseur en ligne, avec message en français pour l'utilisateur. */
+open class RecoError(val userMessage: String) : Exception(userMessage)
+
+/** Erreurs Gemini. */
+sealed class GeminiError(userMessage: String) : RecoError(userMessage) {
     object NoKey : GeminiError("Aucune clé API Gemini enregistrée (Profil › Reconnaissance par photo).")
     object NoNetwork : GeminiError("Pas de connexion Internet : reconnaissance hors-ligne utilisée.")
     object Timeout : GeminiError("Gemini ne répond pas (délai dépassé) : reconnaissance hors-ligne utilisée.")

@@ -28,7 +28,9 @@ private const val HC_EXPLAIN =
     "• Écriture « Nutrition » : chaque aliment ajouté (nom, kcal, glucides/protéines/lipides si connus, type de repas). " +
     "Supprimer une entrée dans Calories la supprime aussi dans Santé Connect.\n" +
     "• Lecture « Nutrition » : uniquement pour vérifier la synchronisation.\n" +
-    "• Lecture « Poids » et « Pas » : afficher ton dernier poids et tes pas du jour dans l'onglet Profil.\n\n" +
+    "• Lecture « Poids » et « Pas » : afficher ton dernier poids et tes pas du jour dans l'onglet Profil.\n" +
+    "• Écriture « Poids » : chaque pesée de ta balance pèse-personne Bluetooth (carte « Balance pèse-personne »), " +
+    "pour que tes autres applis voient ton poids actuel.\n\n" +
     "Les données restent sur ton téléphone : Calories ne les envoie à aucun serveur. " +
     "Tu peux retirer ces autorisations à tout moment dans Santé Connect."
 
@@ -61,7 +63,7 @@ fun HealthConnectCard(entries: List<Entry>, onUseWeight: (Double) -> Unit) {
             msg = "Autorisation « Nutrition » refusée : rien n'est partagé. Tu peux l'accorder dans Santé Connect."
         }
     }
-    LaunchedEffect(enabled, refresh) {
+    LaunchedEffect(enabled, refresh, HealthRefresh.tick) {
         status = HealthSync.status(ctx)
         summary = if (enabled && status == HealthConnectClient.SDK_AVAILABLE) HealthSync.summary(ctx) else null
     }

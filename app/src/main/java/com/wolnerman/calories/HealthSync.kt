@@ -11,6 +11,10 @@ import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.records.metadata.Metadata
+import androidx.health.connect.client.records.metadata.Device
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
@@ -77,8 +81,40 @@ object HealthSync {
         HealthPermission.getWritePermission(NutritionRecord::class),
         HealthPermission.getReadPermission(NutritionRecord::class),
         HealthPermission.getReadPermission(WeightRecord::class),
+        HealthPermission.getWritePermission(WeightRecord::class),   // v2.5 : pesées de la balance pèse-personne
         HealthPermission.getReadPermission(StepsRecord::class),
     )
+    val WRITE_WEIGHT: String = HealthPermission.getWritePermission(WeightRecord::class)
+    val READ_WEIGHT: String = HealthPermission.getReadPermission(WeightRecord::class)
+
+    enum class WeightWrite { WRITTEN, DUPLICATE }
+
+    /** Raisons d'échec affichées telles quelles (françaises, non bloquantes). */
+    class WeightError(msg: String, val needsPermission: Boolean = false) : Exception(msg)
+
+    /**
+     * v2.5 : écrit une pesée (WeightRecord) dans Santé Connect, origine = Calories, appareil = balance.
+     * Pas de doublon : si un poids identique (± 0,05 kg) existe déjà à moins de 2 minutes, rien n'est écrit.
+     */
+    suspend fun writeWeight(ctx: Context, kg: Double, at: Instant, model: String): Result<WeightWrite> = runCatching {
+        if (!available(ctx)) throw WeightError("Santé Connect n'est pas disponible sur ce téléphone.")
+        val c = client(ctx)
+        val g = c.permissionController.getGrantedPermissions()
+        if (WRITE_WEIGHT !in g) throw WeightError("autorisation « Poids » (écriture) non accordée à Calories dans Santé Connect.", needsPermission = true)
+        if (READ_WEIGHT in g) {
+            val near = c.readRecords(ReadRecordsRequest(WeightRecord::class,
+                TimeRangeFilter.between(at.minusMillis(WeighInRules.DEDUPE_MS), at.plusMillis(WeighInRules.DEDUPE_MS)))).records
+            if (WeighInRules.isDuplicate(kg, at.toEpochMilli(), near.map { WeighIn(it.time.toEpochMilli(), it.weight.inKilograms, "") }))
+                return@runCatching WeightWrite.DUPLICATE
+        }
+        val zone = ZoneId.systemDefault().rules.getOffset(at)
+        c.insertRecords(listOf(WeightRecord(time = at, zoneOffset = zone, weight = Mass.kilograms(kg),
+            metadata = Metadata(clientRecordId = "calories-weight-${at.toEpochMilli()}", clientRecordVersion = 1,
+                device = Device(manufacturer = "OKOK / Chipsea", model = model.take(40), type = Device.TYPE_SCALE),
+                recordingMethod = Metadata.RECORDING_METHOD_AUTOMATICALLY_RECORDED))))
+        HealthRefresh.tick++
+        WeightWrite.WRITTEN
+    }
 
     /** SDK_AVAILABLE, SDK_UNAVAILABLE ou SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED (Santé Connect à installer / mettre à jour). */
     fun status(ctx: Context): Int =
@@ -140,4 +176,9 @@ object HealthSync {
             HealthSummary(null, null, null, e.message ?: e.javaClass.simpleName)
         }
     }
+}
+
+/** v2.5 : incrémenté après chaque pesée écrite, pour que la carte Santé Connect relise le dernier poids. */
+object HealthRefresh {
+    var tick by mutableIntStateOf(0)
 }

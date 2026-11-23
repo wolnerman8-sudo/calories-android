@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        if (isFinishing) ScaleManager.shutdown()
+        if (isFinishing) { ScaleManager.shutdown(); BodyScaleManager.shutdown() }
         super.onDestroy()
     }
 }
@@ -702,6 +702,7 @@ fun ProfileScreen(storage: Storage, goal: Int, entries: List<Entry>, onUseGoal: 
         item { ReminderCard() }
         item { ExportCard(entries, goal) }
         item { HealthConnectCard(entries) { kg -> weight = fmt(kg) } }
+        item { BodyScaleCard { kg -> weight = fmt(kg) } }
         item { RecognitionSettingsCard() }
         item { AppVersionText(Modifier.padding(top = 4.dp)) }
         item {

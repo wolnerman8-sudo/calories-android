@@ -126,6 +126,13 @@ Architecture de pilotes (`ScaleDrivers.kt`) : détection automatique d'après l'
 - Liste déroulante : kcal et macros pour 100 g sous chaque nom.
 - « Ajouter » : si les calories sont inconnues, message rouge juste sous le bouton.
 
+## Nouveautés v2.5
+
+- **Balance pèse-personne Bluetooth** (carte « Balance pèse-personne » dans Profil) : Calories lit directement les balances OKOK International / Chipsea, affiche le poids en direct et l'état « Stable », enregistre la pesée (bouton ou automatiquement) et garde les dernières pesées.
+- **Santé Connect** : chaque pesée est écrite comme « Poids » (WeightRecord, origine Calories, appareil balance), sans doublon (même poids à moins de 2 minutes). Les autres applis (ex. Vivre en équilibre) voient le poids actuel ; la carte Santé Connect affiche le nouveau dernier poids. Bouton « Utiliser ce poids dans mon profil ».
+- Protocoles pris en charge (formats documentés par le projet openScale, réimplémentés sans copier de code) : annonces OKOK « C0 », « V20 » (0x20CA), « V11 » (0x11CA), « VF0 » (0xF0FF) ; GATT « Chipsea-BLE » (FFF0/FFF1/FFF2) ; annonces QN « AABB » (0xFFFF) ; norme Bluetooth Weight Scale 0x181D / Body Composition 0x181B.
+- **Journal technique** + « Copier le journal » si la balance n'est pas reconnue. La balance de cuisine (AiLink) n'est jamais touchée.
+
 ## Nouveautés v2.4
 
 - **Champ « Aliment » jamais réécrit pendant la frappe** : le texte, le curseur et la composition du clavier (Samsung, Gboard…) restent exactement ceux tapés. Seul un appui sur un aliment de la liste remplace **tout** le texte par son nom, curseur à la fin (fin du bug « Œuf entier (cru)Œuf entie( »). La liste de suggestions s'affiche maintenant directement sous le champ (plus de fenêtre popup qui prenait le focus du clavier).

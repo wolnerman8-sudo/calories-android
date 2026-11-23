@@ -1,6 +1,6 @@
 # Calories — calculateur de calories Android
 
-Version actuelle : **1.2** (versionCode 3). Historique : 1.0 → première version ; 1.1 → suivi des prébiotiques ; 1.2 → correction du calcul des calories (remplissage automatique), aperçu en direct, 29 aliments en plus (dont plats et produits des Antilles), mise en page corrigée.
+Version actuelle : **2.0** (versionCode 11). Historique : 1.0 → première version ; 1.1 → suivi des prébiotiques ; 1.2 → correction du calcul des calories (remplissage automatique), aperçu en direct, 29 aliments en plus (dont plats et produits des Antilles), mise en page corrigée.
 
 Application Android simple, **hors ligne et sans compte**, pour noter ce que tu manges et suivre tes calories de la journée.
 
@@ -97,12 +97,23 @@ Architecture de pilotes (`ScaleDrivers.kt`) : détection automatique d'après l'
 
 ## OpenAI pour la reconnaissance photo (v1.9)
 
-- Gemini / Google AI Studio n'est pas disponible en Guadeloupe ni en Martinique ; **OpenAI** (où ces territoires sont pris en charge) devient le service en ligne par défaut.
-- Profil › **Reconnaissance par photo** › *Service en ligne* : « OpenAI (recommandé) » ou « Gemini (non disponible aux Antilles) ».
+- Gemini / Google AI Studio n'est pas disponible en Martinique ; **OpenAI** y est pris en charge.
+- Profil › **Reconnaissance par photo** › *Service en ligne* : « OpenAI (recommandé) » ou « Gemini (non disponible en Martinique) ».
   Une clé par service, chiffrée (AES-GCM, Android Keystore) : « Coller la clé API OpenAI », « Enregistrer la clé », « Effacer la clé », « Voir ».
 - Chat Completions (`/v1/chat/completions`), image JPEG 768 px en data URL base64, sortie `json_schema` stricte (même schéma `aliments`).
   Modèles : `gpt-6-luna` (raisonnement `low`), puis `gpt-5.4-nano`, puis `gpt-4.1-mini` si le modèle est introuvable (404 / `model_not_found`).
 - Hors-ligne (AIY Food V1) et Santé Connect inchangés.
+
+## Services gratuits : Groq et OpenRouter (v2.0)
+
+- Client unique compatible OpenAI (`CloudRecognition.kt`), paramétré par URL de base / modèle / clé.
+- Profil › **Reconnaissance par photo** › *Service en ligne* :
+  « Groq (gratuit, recommandé) » (défaut) · « OpenRouter (gratuit, 50 photos/jour) » · « OpenAI (payant) » · « Gemini (non disponible en Martinique) ».
+- **Groq** (`https://api.groq.com/openai/v1`, clé `gsk_…` sur console.groq.com/keys) : `qwen/qwen3.8-27b` (JSON mode, raisonnement `none`), secours `meta-models/muse-spark-open`.
+- **OpenRouter** (`https://openrouter.ai/api/v1`, clé `sk-or-…` sur openrouter.ai/keys) : `nvidia/nemotron-3.5-super-vl:free`, secours `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` (pas de modèles Google, bloqués en Martinique).
+- Une clé chiffrée par service ; détection du préfixe à la saisie (`gsk_`, `sk-or-`, `sk-`, `AIza`) ; bouton « Tester la clé ».
+- Migration (une fois) : une clé rangée dans le mauvais champ (ex. clé Groq dans Gemini en v1.8) est déplacée vers le bon service, qui devient le service choisi.
+- JSON robuste : blocs `<think>` et ```` ```json ```` retirés avant analyse. Version affichée en haut et en bas de Profil.
 
 ## Installer sur ton Samsung (APK)
 

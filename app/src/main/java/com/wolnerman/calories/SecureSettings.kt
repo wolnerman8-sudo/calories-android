@@ -26,12 +26,33 @@ class SecureSettings(ctx: Context) {
         get() = prefs.getBoolean("health_enabled", false)
         set(v) { prefs.edit().putBoolean("health_enabled", v).apply() }
 
-    /** Fournisseur en ligne choisi : « openai » (défaut, v1.9) ou « gemini ». */
+    /** Service en ligne choisi : groq (défaut v2.0), openrouter, openai ou gemini. */
     var provider: String
-        get() = prefs.getString("provider", PROVIDER_OPENAI) ?: PROVIDER_OPENAI
+        get() = prefs.getString("provider", CloudProviders.GROQ) ?: CloudProviders.GROQ
         set(v) { prefs.edit().putString("provider", v).apply() }
 
-    private fun pref(p: String) = if (p == PROVIDER_GEMINI) "gemini_key" else "openai_key"
+    /** Une entrée chiffrée par service (« gemini_key » et « openai_key » existaient en v1.7–1.9). */
+    private fun pref(p: String) = "${p}_key"
+
+    /** Résultat de la migration v2.0 (affiché une fois dans Profil), null si rien n'a bougé. */
+    var migrationNote: String?
+        get() = prefs.getString("migration_note", null)
+        set(v) { prefs.edit().apply { if (v == null) remove("migration_note") else putString("migration_note", v) }.apply() }
+
+    /**
+     * Migration v2.0 (une seule fois) : une clé rangée dans le mauvais emplacement (ex. clé Groq « gsk_… »
+     * collée dans le champ Gemini en v1.8) est déplacée vers le bon service, qui devient le service choisi.
+     */
+    fun migrateV2() {
+        if (prefs.getBoolean("migrated_v2", false)) return
+        val ids = listOf(CloudProviders.GEMINI, CloudProviders.OPENAI, CloudProviders.GROQ, CloudProviders.OPENROUTER)
+        val keys = ids.associateWith { id -> if (hasKey(id)) loadKey(id) else null }
+        val plan = planMigration(keys, prefs.getString("provider", null))
+        plan.keys.forEach { (id, k) -> if (k == null) clearKey(id) else if (k != keys[id]) saveKey(k, id) }
+        provider = plan.provider
+        migrationNote = plan.note
+        prefs.edit().putBoolean("migrated_v2", true).apply()
+    }
 
     fun hasKey(p: String = provider): Boolean = prefs.contains(pref(p))
 
@@ -70,7 +91,34 @@ class SecureSettings(ctx: Context) {
 
     companion object {
         private const val ALIAS = "calories_gemini_key" // nom historique (v1.7), sert pour toutes les clés
-        const val PROVIDER_OPENAI = "openai"
-        const val PROVIDER_GEMINI = "gemini"
+        const val PROVIDER_OPENAI = CloudProviders.OPENAI
+        const val PROVIDER_GEMINI = CloudProviders.GEMINI
+
+        data class Plan(val keys: Map<String, String?>, val provider: String, val note: String?)
+
+        /**
+         * Calcul pur de la migration (testable) : [keys] = clé déchiffrée par emplacement, [savedProvider] = choix
+         * enregistré (null si jamais choisi). Une clé dont le préfixe désigne un autre service est déplacée si
+         * l'emplacement cible est vide. Le service choisi devient celui de la clé déplacée (Groq en priorité),
+         * sinon le choix enregistré s'il a une clé, sinon Groq.
+         */
+        fun planMigration(keys: Map<String, String?>, savedProvider: String?): Plan {
+            val out = keys.toMutableMap()
+            val moved = ArrayList<String>()
+            for ((slot, k) in keys) {
+                if (k.isNullOrBlank()) continue
+                val target = CloudProviders.detect(k) ?: continue
+                if (target == slot || !out[target].isNullOrBlank()) continue
+                out[target] = k; out[slot] = null; moved += target
+            }
+            val order = listOf(CloudProviders.GROQ, CloudProviders.OPENROUTER, CloudProviders.OPENAI, CloudProviders.GEMINI)
+            val provider = moved.minByOrNull { order.indexOf(it) }
+                ?: savedProvider?.takeIf { !out[it].isNullOrBlank() }
+                ?: CloudProviders.GROQ
+            val note = if (moved.isEmpty()) null else moved.joinToString(", ") { id ->
+                "Ta clé ${CloudProviders.nameOf(id)} était rangée au mauvais endroit : elle a été déplacée vers ${CloudProviders.nameOf(id)}."
+            } + " Service choisi : ${CloudProviders.nameOf(provider)}."
+            return Plan(out, provider, note)
+        }
     }
 }

@@ -21,12 +21,11 @@ import kotlinx.coroutines.withContext
 /** Résultat d'une reconnaissance : suggestions + d'où elles viennent + message éventuel. */
 data class RecoResult(val guesses: List<FoodGuess>, val source: String, val message: String?)
 
-/** Fournisseur en ligne choisi (OpenAI par défaut) puis, sans clé / sans réseau / en cas d'erreur, le modèle hors-ligne. Hors thread UI. */
+/** Service en ligne choisi (Groq par défaut) puis, sans clé / sans réseau / en cas d'erreur, le modèle hors-ligne. Hors thread UI. */
 fun recognizeFood(ctx: android.content.Context, photoPath: String): RecoResult {
     val settings = SecureSettings(ctx)
     val provider = settings.provider
-    val openai = provider != SecureSettings.PROVIDER_GEMINI
-    val pName = if (openai) "OpenAI" else "Gemini"
+    val pName = CloudProviders.nameOf(provider)
     val key = settings.loadKey(provider)
     var note: String? = null
     if (key.isNullOrBlank()) {
@@ -36,7 +35,8 @@ fun recognizeFood(ctx: android.content.Context, photoPath: String): RecoResult {
         val b64 = Photos.jpegBase64(photoPath, 768)
         if (b64 == null) note = "Photo illisible pour $pName."
         else try {
-            val (foods, model) = if (openai) OpenAiClient.recognize(key, b64) else GeminiClient.recognize(key, b64)
+            val cloud = CloudProviders.byId(provider)
+            val (foods, model) = if (cloud != null) CloudClient.recognize(cloud, key, b64) else GeminiClient.recognize(key, b64)
             if (foods.isNotEmpty()) return RecoResult(foods, "$pName ($model)", null)
             note = "$pName n'a reconnu aucun aliment sur la photo."
         } catch (e: RecoError) { note = e.userMessage }
@@ -50,6 +50,14 @@ fun recognizeFood(ctx: android.content.Context, photoPath: String): RecoResult {
         RecoResult(emptyList(), "hors-ligne", "${note ?: ""} Modèle hors-ligne indisponible (${e.message ?: e.javaClass.simpleName}).")
     }
 }
+
+/** « Tester la clé » : renvoie un message OK ou l'erreur en français. Hors thread UI. */
+fun testProviderKey(provider: String, key: String): Pair<Boolean, String> = try {
+    val cloud = CloudProviders.byId(provider)
+    val model = if (cloud != null) CloudClient.testKey(cloud, key) else GeminiClient.testKey(key)
+    true to "✅ Clé ${CloudProviders.nameOf(provider)} valide (modèle $model)."
+} catch (e: RecoError) { false to "❌ ${e.userMessage}" }
+catch (e: Exception) { false to "❌ ${e.message ?: e.javaClass.simpleName}" }
 
 /**
  * Bloc « Reconnaître l'aliment » sous la photo. Lance automatiquement la reconnaissance pour chaque nouvelle photo
@@ -109,21 +117,34 @@ fun RecognitionPanel(photoPath: String?, onPick: (FoodGuess) -> Unit) {
     }
 }
 
+private data class ProviderChoice(val id: String, val label: String)
+
+private val CHOICES = listOf(
+    ProviderChoice(CloudProviders.GROQ, CloudProviders.Groq.label),
+    ProviderChoice(CloudProviders.OPENROUTER, CloudProviders.OpenRouter.label),
+    ProviderChoice(CloudProviders.OPENAI, CloudProviders.OpenAi.label),
+    ProviderChoice(CloudProviders.GEMINI, "Gemini (non disponible en Martinique)"),
+)
+
 /** Carte de réglages dans l'onglet Profil. */
 @Composable
 fun RecognitionSettingsCard() {
     val ctx = LocalContext.current
     val settings = remember { SecureSettings(ctx) }
+    val scope = rememberCoroutineScope()
     var enabled by remember { mutableStateOf(settings.recognitionEnabled) }
     var provider by remember { mutableStateOf(settings.provider) }
-    var version by remember { mutableIntStateOf(0) } // force la relecture de l'état de la clé
-    val openai = provider != SecureSettings.PROVIDER_GEMINI
-    val pName = if (openai) "OpenAI" else "Gemini"
+    var version by remember { mutableIntStateOf(0) } // force la relecture de l'état des clés
+    val pName = CloudProviders.nameOf(provider)
     val hint = remember(provider, version) { settings.keyHint(provider) }
     val hasKey = remember(provider, version) { settings.hasKey(provider) }
     var input by remember(provider) { mutableStateOf("") }
     var show by remember { mutableStateOf(false) }
     var msg by remember(provider) { mutableStateOf<String?>(null) }
+    var testing by remember { mutableStateOf(false) }
+    var migration by remember { mutableStateOf(settings.migrationNote) }
+    fun choose(id: String) { provider = id; settings.provider = id }
+    val detected = CloudProviders.detect(input)
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Reconnaissance par photo", style = MaterialTheme.typography.titleMedium)
@@ -134,16 +155,16 @@ fun RecognitionSettingsCard() {
             Text("Après « Photo » ou « Galerie », l'appli propose les aliments reconnus. Avec une clé API : " +
                 "analyse en ligne (nom, quantité, kcal). Sans clé ou sans réseau : modèle hors-ligne intégré, moins précis.",
                 style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-            Text("Service en ligne", style = MaterialTheme.typography.labelLarge)
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()
-                .clickable { provider = SecureSettings.PROVIDER_OPENAI; settings.provider = provider }) {
-                RadioButton(selected = openai, onClick = { provider = SecureSettings.PROVIDER_OPENAI; settings.provider = provider })
-                Text("OpenAI (recommandé)")
+            migration?.let {
+                Text("ℹ️ $it", style = MaterialTheme.typography.bodySmall, color = Color(0xFF1565C0))
+                TextButton(onClick = { settings.migrationNote = null; migration = null }) { Text("Compris") }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()
-                .clickable { provider = SecureSettings.PROVIDER_GEMINI; settings.provider = provider }) {
-                RadioButton(selected = !openai, onClick = { provider = SecureSettings.PROVIDER_GEMINI; settings.provider = provider })
-                Text("Gemini (non disponible aux Antilles)")
+            Text("Service en ligne", style = MaterialTheme.typography.labelLarge)
+            CHOICES.forEach { c ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { choose(c.id) }) {
+                    RadioButton(selected = provider == c.id, onClick = { choose(c.id) })
+                    Text(c.label + if (settings.hasKey(c.id) && provider != c.id) "  · clé enregistrée" else "")
+                }
             }
             Text("Clé API $pName", style = MaterialTheme.typography.labelLarge)
             Text(when {
@@ -156,31 +177,81 @@ fun RecognitionSettingsCard() {
                 visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 trailingIcon = { TextButton(onClick = { show = !show }) { Text(if (show) "Masquer" else "Voir") } })
+            if (detected != null && detected != provider) {
+                Text("⚠️ Cette clé ressemble à une clé ${CloudProviders.nameOf(detected)}, pas $pName.",
+                    style = MaterialTheme.typography.bodySmall, color = Color(0xFFB26A00))
+                TextButton(onClick = { choose(detected) }) { Text("Passer à ${CloudProviders.nameOf(detected)}") }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(enabled = input.length >= 20, onClick = {
-                    msg = try { settings.saveKey(input, provider); input = ""; version++; "Clé enregistrée." }
-                    catch (e: Exception) { "Impossible d'enregistrer la clé : ${e.message}" }
+                    // Si le préfixe désigne un autre service, la clé va dans le bon emplacement et ce service est choisi
+                    val target = detected?.takeIf { it != provider } ?: provider
+                    msg = try {
+                        settings.saveKey(input, target); input = ""
+                        if (target != provider) choose(target)
+                        version++
+                        if (target != provider) "Clé enregistrée pour ${CloudProviders.nameOf(target)} (service choisi)." else "Clé enregistrée."
+                    } catch (e: Exception) { "Impossible d'enregistrer la clé : ${e.message}" }
                 }) { Text("Enregistrer la clé") }
                 OutlinedButton(enabled = hasKey, onClick = {
                     settings.clearKey(provider); version++; msg = "Clé effacée."
                 }) { Text("Effacer la clé") }
             }
-            msg?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Color(0xFF2E7D32)) }
-            if (openai) {
-                Text("Clé sur platform.openai.com/api-keys (crédit prépayé requis, moins d'un centime par photo).",
-                    style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                Text("Confidentialité : la photo réduite n'est envoyée à OpenAI que quand tu lances une reconnaissance. " +
-                    "Selon OpenAI, les données envoyées à l'API ne servent pas à entraîner ses modèles (sauf si tu l'acceptes " +
-                    "explicitement) ; elles peuvent être conservées jusqu'à 30 jours pour la détection des abus.",
-                    style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-            } else {
-                Text("Gemini / Google AI Studio n'est pas proposé en Guadeloupe et en Martinique : préfère OpenAI. " +
-                    "Clé sur aistudio.google.com/apikey là où c'est disponible.",
-                    style = MaterialTheme.typography.bodySmall, color = Color(0xFFB26A00))
-                Text("⚠️ Avec l'offre gratuite, Google peut utiliser les photos envoyées pour améliorer ses produits " +
-                    "(relecture humaine possible). N'envoie pas de photos personnelles ou sensibles.",
-                    style = MaterialTheme.typography.bodySmall, color = Color(0xFFB26A00))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(enabled = !testing && (hasKey || input.length >= 20), onClick = {
+                    val k = input.takeIf { it.length >= 20 } ?: settings.loadKey(provider)
+                    if (k == null) { msg = "❌ Clé illisible : recolle-la."; return@OutlinedButton }
+                    testing = true; msg = null
+                    val p = provider
+                    scope.launch {
+                        msg = withContext(Dispatchers.IO) { testProviderKey(p, k) }.second
+                        testing = false
+                    }
+                }) { Text("Tester la clé") }
+                if (testing) CircularProgressIndicator(Modifier.size(22.dp))
+            }
+            msg?.let { Text(it, style = MaterialTheme.typography.bodySmall,
+                color = if (it.startsWith("❌")) Color(0xFFC62828) else Color(0xFF2E7D32)) }
+            when (provider) {
+                CloudProviders.GROQ -> {
+                    Text(CloudProviders.Groq.help, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Text("Confidentialité : la photo réduite n'est envoyée à Groq que quand tu lances une reconnaissance.",
+                        style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+                CloudProviders.OPENROUTER -> {
+                    Text(CloudProviders.OpenRouter.help, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Text("Confidentialité : la photo réduite passe par OpenRouter puis le fournisseur du modèle gratuit ; " +
+                        "les modèles gratuits peuvent conserver les données envoyées.",
+                        style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+                CloudProviders.OPENAI -> {
+                    Text(CloudProviders.OpenAi.help, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Text("Confidentialité : la photo réduite n'est envoyée à OpenAI que quand tu lances une reconnaissance. " +
+                        "Selon OpenAI, les données envoyées à l'API ne servent pas à entraîner ses modèles (sauf si tu l'acceptes " +
+                        "explicitement) ; elles peuvent être conservées jusqu'à 30 jours pour la détection des abus.",
+                        style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+                else -> {
+                    Text("Gemini / Google AI Studio n'est pas disponible en Martinique : choisis plutôt Groq (gratuit). " +
+                        "Clé sur aistudio.google.com/apikey là où c'est disponible.",
+                        style = MaterialTheme.typography.bodySmall, color = Color(0xFFB26A00))
+                    Text("⚠️ Avec l'offre gratuite, Google peut utiliser les photos envoyées pour améliorer ses produits " +
+                        "(relecture humaine possible).", style = MaterialTheme.typography.bodySmall, color = Color(0xFFB26A00))
+                }
             }
         }
     }
+}
+
+/** Version de l'appli (« Version 2.0 »), lue dans le paquet installé. */
+@Composable
+fun AppVersionText(modifier: Modifier = Modifier) {
+    val ctx = LocalContext.current
+    val v = remember {
+        runCatching {
+            val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
+            "Version ${pi.versionName}"
+        }.getOrDefault("Version ?")
+    }
+    Text("Calories — $v", style = MaterialTheme.typography.labelLarge, color = Color.Gray, modifier = modifier)
 }

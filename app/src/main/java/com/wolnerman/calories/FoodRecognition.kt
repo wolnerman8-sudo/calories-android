@@ -45,21 +45,29 @@ object GeminiParser {
                 ?.takeIf { it in setOf("SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "IMAGE_SAFETY", "RECITATION") }
     }.getOrNull()
 
-    /** Analyse le JSON produit par le modèle : liste ou objet {"aliments": [...]}; accepte les blocs ```json. */
+    /**
+     * Isole le JSON d'une réponse de modèle : retire les blocs <think>…</think> (et un <think> non fermé),
+     * prend le contenu d'un bloc ```json … ``` s'il existe, puis découpe du premier { ou [ au dernier } ou ] correspondant.
+     */
+    fun extractJson(text: String): String {
+        var t = text.replace(Regex("(?is)<think>.*?</think>"), "")
+        t = t.replace(Regex("(?is)<think>.*\\z"), "").trim() // réflexion tronquée sans balise de fin
+        Regex("(?s)```(?:json|JSON)?\\s*(.*?)```").find(t)?.let { t = it.groupValues[1].trim() }
+        val iObj = t.indexOf('{'); val iArr = t.indexOf('[')
+        val start = listOf(iObj, iArr).filter { it >= 0 }.minOrNull() ?: throw IllegalArgumentException("pas de JSON")
+        val close = if (t[start] == '{') '}' else ']'
+        val end = t.lastIndexOf(close)
+        if (end <= start) throw IllegalArgumentException("JSON incomplet")
+        return t.substring(start, end + 1)
+    }
+
+    /** Analyse le JSON produit par le modèle : liste ou objet {"aliments": [...]}; tolère ```json et <think>. */
     fun parseFoods(text: String): List<FoodGuess> {
-        var t = text.trim()
-        if (t.startsWith("```")) t = t.removePrefix("```json").removePrefix("```JSON").removePrefix("```").removeSuffix("```").trim()
-        val arr: JSONArray = when {
-            t.startsWith("[") -> JSONArray(t)
-            t.startsWith("{") -> {
-                val o = JSONObject(t)
-                o.optJSONArray("aliments") ?: o.optJSONArray("foods") ?: o.optJSONArray("items")
-                    ?: if (o.has("nom")) JSONArray().put(o) else JSONArray()
-            }
-            else -> {
-                val s = t.indexOf('['); val e = t.lastIndexOf(']')
-                if (s >= 0 && e > s) JSONArray(t.substring(s, e + 1)) else throw IllegalArgumentException("pas de JSON")
-            }
+        val t = extractJson(text)
+        val arr: JSONArray = if (t.startsWith("[")) JSONArray(t) else {
+            val o = JSONObject(t)
+            o.optJSONArray("aliments") ?: o.optJSONArray("foods") ?: o.optJSONArray("items")
+                ?: if (o.has("nom")) JSONArray().put(o) else JSONArray()
         }
         val out = ArrayList<FoodGuess>()
         for (i in 0 until arr.length()) {
@@ -114,7 +122,7 @@ open class RecoError(val userMessage: String) : Exception(userMessage)
 
 /** Erreurs Gemini. */
 sealed class GeminiError(userMessage: String) : RecoError(userMessage) {
-    object NoKey : GeminiError("Aucune clé API Gemini enregistrée (Profil › Reconnaissance par photo).")
+    object NoKey : GeminiError("Aucune clé API Gemini enregistrée (Profil › Reconnaissance par photo) : mode hors-ligne.")
     object NoNetwork : GeminiError("Pas de connexion Internet : reconnaissance hors-ligne utilisée.")
     object Timeout : GeminiError("Gemini ne répond pas (délai dépassé) : reconnaissance hors-ligne utilisée.")
     object InvalidKey : GeminiError("Clé API Gemini invalide. Vérifie-la dans Profil › Reconnaissance par photo.")
@@ -180,9 +188,30 @@ object GeminiClient {
             code == 403 -> GeminiError.Denied(msg.take(120))
             code == 429 || status == "RESOURCE_EXHAUSTED" -> GeminiError.Quota
             code >= 500 -> GeminiError.Server(code)
-            msg.contains("location is not supported", true) -> GeminiError.Other("l'API n'est pas disponible depuis ce pays/région.")
+            msg.contains("location is not supported", true) -> GeminiError.Other("Gemini n'est pas disponible dans ta région (c'est le cas en Martinique) : choisis Groq.")
             else -> GeminiError.Other("HTTP $code ${msg.take(160)}".trim())
         }
+    }
+
+    /** « Tester la clé » : liste des modèles (GET, sans coût). Renvoie le premier modèle connu disponible. */
+    fun testKey(apiKey: String): String {
+        if (apiKey.isBlank()) throw GeminiError.NoKey
+        val conn = try { URL("${BASE.removeSuffix("models/")}models?pageSize=200").openConnection() as HttpURLConnection }
+            catch (e: IOException) { throw GeminiError.NoNetwork }
+        try {
+            conn.connectTimeout = 15_000; conn.readTimeout = 30_000
+            conn.setRequestProperty("x-goog-api-key", apiKey.trim())
+            val code = conn.responseCode
+            if (code in 200..299) {
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                return MODELS.firstOrNull { body.contains("models/$it\"") } ?: "liste OK"
+            }
+            throw errorFor(code, conn.errorStream?.bufferedReader()?.use { it.readText() }) ?: GeminiError.ModelUnavailable
+        } catch (e: GeminiError) { throw e }
+        catch (e: UnknownHostException) { throw GeminiError.NoNetwork }
+        catch (e: SocketTimeoutException) { throw GeminiError.Timeout }
+        catch (e: IOException) { throw GeminiError.NoNetwork }
+        finally { conn.disconnect() }
     }
 
     /** Appel bloquant (à faire sur Dispatchers.IO). Renvoie les suggestions et l'id du modèle utilisé. */

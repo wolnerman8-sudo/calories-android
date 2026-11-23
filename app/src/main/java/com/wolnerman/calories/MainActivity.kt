@@ -51,6 +51,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val storage = Storage(applicationContext)
+        // v2.0 : range une clé API collée dans le mauvais champ (ex. clé Groq dans Gemini) — une seule fois
+        runCatching { SecureSettings(applicationContext).migrateV2() }
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = Color(0xFF2E7D32), secondary = Color(0xFFFFB300))) {
                 Surface(Modifier.fillMaxSize()) { CaloriesApp(storage) }
@@ -544,6 +546,7 @@ fun ProfileScreen(storage: Storage, goal: Int, entries: List<Entry>, onUseGoal: 
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), contentPadding = PaddingValues(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item { AppVersionText() }
         item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -604,6 +607,7 @@ fun ProfileScreen(storage: Storage, goal: Int, entries: List<Entry>, onUseGoal: 
         }
         item { HealthConnectCard(entries) { kg -> weight = fmt(kg) } }
         item { RecognitionSettingsCard() }
+        item { AppVersionText(Modifier.padding(top = 4.dp)) }
     }
 }
 

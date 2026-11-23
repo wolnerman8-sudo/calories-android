@@ -10,6 +10,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -72,6 +76,13 @@ class MainActivity : ComponentActivity() {
 
 private fun today(): String = LocalDate.now().toString()
 private fun nowTime(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+/** v2.4 : propriété locale déléguée vers un champ de FoodForm (le reste du formulaire garde sa syntaxe). */
+internal class FormField<T>(private val st: MutableState<FoodForm>, private val get: (FoodForm) -> T, private val set: (FoodForm, T) -> FoodForm) {
+    operator fun getValue(thisRef: Any?, p: kotlin.reflect.KProperty<*>): T = get(st.value)
+    operator fun setValue(thisRef: Any?, p: kotlin.reflect.KProperty<*>, v: T) { st.value = set(st.value, v) }
+}
+internal fun <T> formField(st: MutableState<FoodForm>, get: (FoodForm) -> T, set: (FoodForm, T) -> FoodForm) = FormField(st, get, set)
+
 internal fun fmt(d: Double): String = if (d % 1.0 == 0.0) d.toInt().toString() else String.format(Locale.FRENCH, "%.1f", d).replace(',', '.')
 private fun g1(d: Double): String = String.format(Locale.FRENCH, "%.1f", d)
 
@@ -225,20 +236,23 @@ fun SummaryCard(total: Int, goal: Int, macros: Macros) {
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun AddEntryCard(onAdd: (Entry) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var grams by remember { mutableStateOf("100") }
-    var kcal100 by remember { mutableStateOf("") }
-    var carbs100 by remember { mutableStateOf("") }
-    var prot100 by remember { mutableStateOf("") }
-    var fat100 by remember { mutableStateOf("") }
+    // v2.4 : un seul état pur (FoodForm) ; le champ Aliment est un TextFieldValue jamais réécrit pendant la frappe
+    val formState = remember { mutableStateOf(FoodForm()) }
+    var form by formState
+    val name: String = form.text
+    var grams by formField(formState, { it.grams }) { s, v -> s.copy(grams = v) }
+    var kcal100 by formField(formState, { it.kcal100 }) { s, v -> s.copy(kcal100 = v) }
+    var carbs100 by formField(formState, { it.carbs100 }) { s, v -> s.copy(carbs100 = v) }
+    var prot100 by formField(formState, { it.prot100 }) { s, v -> s.copy(prot100 = v) }
+    var fat100 by formField(formState, { it.fat100 }) { s, v -> s.copy(fat100 = v) }
     val nutrTxt = remember { mutableStateMapOf<String, String>() }
     var showNutr by remember { mutableStateOf(false) }
     var fermented by remember { mutableStateOf(false) }
     var prebiotic by remember { mutableStateOf(false) }
     fun fillNutr(m: Map<String, Double>) { nutrTxt.clear(); m.forEach { (k, v) -> nutrTxt[k] = fmt(v) } }
     // Nom de l'aliment intégré dont les valeurs ont été copiées automatiquement (null = saisie manuelle / scan)
-    var autoFrom by remember { mutableStateOf<String?>(null) }
-    var expanded by remember { mutableStateOf(false) }
+    var autoFrom by formField(formState, { it.autoFrom }) { s, v -> s.copy(autoFrom = v, picked = if (v == null) false else s.picked) }
+    var expanded by remember { mutableStateOf(false) }   // liste de suggestions (en ligne, pas de popup)
     var barcode by remember { mutableStateOf("") }
     var scanned by remember { mutableStateOf<ScannedProduct?>(null) }
     var scanMsg by remember { mutableStateOf<String?>(null) }
@@ -249,7 +263,6 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
     var pendingCameraPath by rememberSaveable { mutableStateOf<String?>(null) }
     var photoBusy by remember { mutableStateOf(false) }
     var filledNote by remember { mutableStateOf<String?>(null) }   // bandeau vert après remplissage par la photo
-    var qtyNote by remember { mutableStateOf<String?>(null) }      // v2.3 : « 2 × Œuf (≈ 50 g) = 100 g »
     val addMsg = remember { BringIntoViewRequester() }
     var addError by remember { mutableStateOf<String?>(null) }     // raison rouge après un appui sur « Ajouter »
     var addNotice by remember { mutableStateOf<String?>(null) }    // avis non bloquant (photo…)
@@ -285,7 +298,7 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
             when (val r = OpenFoodFacts.lookup(code)) {
                 is LookupResult.Found -> {
                     scanned = r.product
-                    name = r.product.name
+                    form = FoodFormLogic.setName(form, r.product.name)
                     r.product.kcalPer100g?.let { kcal100 = fmt(it) }
                     carbs100 = r.product.carbs?.let { fmt(it) } ?: ""
                     prot100 = r.product.proteins?.let { fmt(it) } ?: ""
@@ -315,31 +328,29 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
     }
 
     // Nom de l'aliment intégré dont les valeurs ont été copiées automatiquement (null = saisie manuelle / scan)
-    fun fillFood(f: Food) {
-        kcal100 = f.kcalPer100g.toString()
-        carbs100 = f.carbs?.let { fmt(it) } ?: ""; prot100 = f.proteins?.let { fmt(it) } ?: ""; fat100 = f.fat?.let { fmt(it) } ?: ""
-        fillNutr(f.nutrients); fermented = f.fermented; prebiotic = f.prebiotic
-        autoFrom = f.name
+    /** Nutriments / cases à cocher suivent l'aliment de la liste (kcal et macros sont dans FoodFormLogic). */
+    fun syncExtras(before: String?) {
+        val now = form.autoFrom
+        if (now == before) return
+        val f = now?.let { foodByName(it) }
+        if (f != null) { fillNutr(f.nutrients); fermented = f.fermented; prebiotic = f.prebiotic }
+        else if (before != null) { nutrTxt.clear(); fermented = false; prebiotic = false }
     }
-    fun clearAuto() {
-        kcal100 = ""; carbs100 = ""; prot100 = ""; fat100 = ""; nutrTxt.clear()
-        fermented = false; prebiotic = false; autoFrom = null
+    fun fillFood(f: Food) { val b = form.autoFrom; form = FoodFormLogic.fill(form, f); syncExtras(b); if (b == f.name) { fillNutr(f.nutrients); fermented = f.fermented; prebiotic = f.prebiotic } }
+    fun clearAuto() { val b = form.autoFrom; form = FoodFormLogic.unfill(form); syncExtras(b) }
+    /** Frappe dans Aliment : on garde exactement ce que le clavier envoie (texte + composition). */
+    fun onNameChange(v: TextFieldValue) {
+        val b = form.autoFrom
+        form = FoodFormLogic.type(form, v, locked = scanned != null)
+        syncExtras(b)
     }
-    /** v2.3 : quantité saisie en tête (« 2 œufs », « 200 g riz ») → Quantité g, avec une note. */
-    fun applyQuantity(text: String, food: Food?) {
-        val q = parseQuantity(text)
-        if (!q.hasQuantity) { qtyNote = null; return }
-        val r = quantityFor(q, food)
-        if (r != null) { grams = fmt(Math.round(r.grams * 10.0) / 10.0); qtyNote = r.note }
-        else qtyNote = if (food != null) "Poids d'une unité inconnu pour ${food.name} : indique la quantité en grammes." else null
-    }
-    /** Saisie du nom : remplit automatiquement si le texte correspond à un aliment intégré. */
-    fun onNameChange(newName: String) {
-        name = newName
-        val manual = autoFrom == null && (kcal100.isNotBlank() || scanned != null)
-        val m = findFood(newName)
-        if (!manual) { if (m != null) { if (m.name != autoFrom) fillFood(m) } else if (autoFrom != null) clearAuto() }
-        applyQuantity(newName, if (manual) null else m)
+    /** Choix explicite dans la liste : remplace tout le texte, curseur à la fin. */
+    fun pickFood(f: Food) {
+        val b = form.autoFrom
+        scanned = null
+        form = FoodFormLogic.pick(form, f)
+        if (b == f.name) { fillNutr(f.nutrients); fermented = f.fermented; prebiotic = f.prebiotic } else syncExtras(b)
+        expanded = false; addError = null
     }
 
     val suggestions = remember(name) { suggestFoods(name) }
@@ -381,39 +392,36 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     Text(it, Modifier.padding(8.dp), style = MaterialTheme.typography.bodySmall, color = Color(0xFF1B5E20), fontWeight = FontWeight.SemiBold)
                 }
             }
-            ExposedDropdownMenuBox(expanded = expanded && suggestions.isNotEmpty(), onExpandedChange = { expanded = it },
-                modifier = Modifier.bringIntoViewRequester(formTop)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { onNameChange(it); expanded = true; addError = null },
-                    label = { Text("Aliment (liste ou saisie libre)") },
-                    singleLine = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor()
-                )
-                ExposedDropdownMenu(expanded = expanded && suggestions.isNotEmpty(), onDismissRequest = { expanded = false }) {
-                    suggestions.forEach { f ->
-                        DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text(f.name)
-                                    Text(foodLine(f), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                                }
-                            },
-                            onClick = {
-                                // Choix explicite : remplace toujours les valeurs ; garde la quantité tapée (« 2 œufs »)
-                                scanned = null
-                                val typed = name
-                                name = f.name; fillFood(f)
-                                applyQuantity(typed, f)
-                                expanded = false; addError = null
+            // v2.4 : TextFieldValue (la composition du clavier Samsung est conservée) + liste EN LIGNE
+            // (l'ancien menu déroulant ouvrait une fenêtre popup qui prenait le focus pendant la frappe).
+            OutlinedTextField(
+                value = form.name,
+                onValueChange = { v -> onNameChange(v); if (v.text != name) expanded = true; addError = null },
+                label = { Text("Aliment (liste ou saisie libre)") },
+                singleLine = true,
+                trailingIcon = if (name.isNotEmpty()) {
+                    {
+                        IconButton(onClick = { val b = form.autoFrom; form = FoodFormLogic.clear(form); syncExtras(b); expanded = false; addError = null }) {
+                            Icon(Icons.Filled.Clear, contentDescription = "Effacer l'aliment")
+                        }
+                    }
+                } else null,
+                modifier = Modifier.fillMaxWidth().bringIntoViewRequester(formTop)
+            )
+            if (expanded && name.isNotBlank() && suggestions.isNotEmpty()) {
+                Surface(tonalElevation = 3.dp, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                        suggestions.take(15).forEach { f ->
+                            Column(Modifier.fillMaxWidth().clickable { pickFood(f) }.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                                Text(f.name)
+                                Text(foodLine(f), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                             }
-                        )
+                        }
                     }
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(grams, { grams = it.take(8); addError = null; qtyNote = null }, label = { Text("Quantité g", maxLines = 1) }, singleLine = true,
+                OutlinedTextField(grams, { form = FoodFormLogic.typeGrams(form, it.take(8)); addError = null }, label = { Text("Quantité g", maxLines = 1) }, singleLine = true,
                     isError = name.isNotBlank() && (g == null || g <= 0),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
                 OutlinedTextField(kcal100, { kcal100 = it.take(8); autoFrom = null; addError = null }, label = { Text("kcal/100 g", maxLines = 1) }, singleLine = true,
@@ -423,8 +431,11 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     } else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
             }
-            qtyNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Color(0xFF1B5E20), fontWeight = FontWeight.SemiBold) }
-            ScalePanel(onUse = { w -> grams = fmt(Math.round(w * 10.0) / 10.0); qtyNote = null })
+            // v2.4 : un nombre dans le nom ne change JAMAIS la quantité tout seul : simple proposition à toucher
+            FoodFormLogic.chip(form)?.let { r ->
+                AssistChip(onClick = { form = FoodFormLogic.applyChip(form) }, label = { Text(r.chip) })
+            }
+            ScalePanel(onUse = { w -> form = FoodFormLogic.scale(form, w) })
             autoFrom?.let { Text("Valeurs de la liste : $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
             Text("Pour 100 g (facultatif) : G = glucides, P = protéines, L = lipides", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -498,9 +509,12 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     clearAuto()
                     kcal100 = f.kcal100; carbs100 = f.carbs100; prot100 = f.prot100; fat100 = f.fat100
                 }
-                name = f.name
-                grams = f.grams
-                filledNote = "✓ Rempli par la photo : ${f.name} · ${f.grams} g (${f.gramsSource})" +
+                form = FoodFormLogic.setName(form, f.name)
+                // v2.4 : une quantité tapée ou venue de la balance n'est pas écrasée (sauf pesée stable de la balance)
+                val keepGrams = scaleG == null && (form.gramsBy == GramsSource.USER || form.gramsBy == GramsSource.SCALE)
+                if (!keepGrams) form = form.copy(grams = f.grams, gramsBy = if (scaleG != null) GramsSource.SCALE else GramsSource.PHOTO)
+                filledNote = "✓ Rempli par la photo : ${f.name} · " +
+                    (if (keepGrams) "${grams} g (quantité gardée)" else "${f.grams} g (${f.gramsSource})") +
                     (if (f.kcalMissing) " · kcal inconnues, saisis-les" else " · ${kcal100} kcal/100 g") +
                     ". Vérifie puis touche « Ajouter »."
                 scope.launch { runCatching { formTop.bringIntoView() } }
@@ -520,8 +534,8 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     val photo = photoPath?.takeIf { p -> runCatching { File(p).exists() }.getOrDefault(false) }
                     if (photoPath != null && photo == null) addNotice = "Photo introuvable : aliment ajouté sans photo."
                     val entry = try {
-                        // « 2 Œuf » → nom de l'aliment de la liste (la quantité est déjà dans Quantité g)
-                        val entryName = autoFrom?.takeIf { parseQuantity(name).hasQuantity } ?: name.trim()
+                        // v2.4 : nom = aliment de la liste dont viennent les valeurs, sinon le texte tapé
+                        val entryName = FoodFormLogic.entryName(form)
                         Entry(System.currentTimeMillis(), today(), nowTime(), entryName, g!!, k!!, photo,
                             parseNum(carbs100)?.takeIf { it >= 0 }, parseNum(prot100)?.takeIf { it >= 0 }, parseNum(fat100)?.takeIf { it >= 0 },
                             nutr = nutrTxt.mapNotNull { (key, v) -> parseNum(v)?.takeIf { it >= 0 }?.let { key to it } }.toMap(),
@@ -535,8 +549,8 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                         addError = "Impossible d'enregistrer : ${e.message ?: e.javaClass.simpleName}"; return@Button
                     }
                     photoPath = null
-                    name = ""; grams = "100"; kcal100 = ""; carbs100 = ""; prot100 = ""; fat100 = ""; nutrTxt.clear(); fermented = false; prebiotic = false; barcode = ""; scanned = null; scanMsg = null; autoFrom = null
-                    filledNote = null; addError = null; qtyNote = null
+                    form = FoodForm(); nutrTxt.clear(); fermented = false; prebiotic = false; barcode = ""; scanned = null; scanMsg = null
+                    filledNote = null; addError = null; expanded = false
                     addNotice = (addNotice?.let { "$it " } ?: "") + "✓ Ajouté : ${entry.name} (${entry.kcal} kcal)."
                 }, modifier = Modifier.bringIntoViewRequester(addRow),
                     colors = if (valid) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColors(containerColor = Color(0xFF9E9E9E))) { Text("Ajouter") }

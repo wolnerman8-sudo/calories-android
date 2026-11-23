@@ -118,12 +118,12 @@ fun parseQuantity(input: String): QtyParse {
 private fun stripLinkers(s: String) = s.replace(Regex("^(de |d'|d’|du |des |d )"), "").trim()
 
 /** Quantité en grammes et note explicative, ou null si on ne peut pas la déduire (aliment sans poids unitaire). */
-data class QtyResult(val grams: Double, val note: String)
+data class QtyResult(val grams: Double, val note: String, val chip: String)
 
 private fun g0(d: Double) = if (d % 1.0 == 0.0) d.toLong().toString() else String.format(Locale.FRENCH, "%.1f", d)
 
 fun quantityFor(q: QtyParse, food: Food?): QtyResult? {
-    q.grams?.let { return QtyResult(it, "Quantité lue : ${g0(it)} g") }
+    q.grams?.let { return QtyResult(it, "Quantité lue : ${g0(it)} g", "Utiliser ${g0(it)} g") }
     val n = q.count ?: return null
     if (n <= 0) return null
     val unitLabel = food?.unitLabel
@@ -131,12 +131,12 @@ fun quantityFor(q: QtyParse, food: Food?): QtyResult? {
     if (q.measureGrams != null) {
         val per = if (food?.unitGrams != null && unitLabel != null && fold(unitLabel).startsWith(fold(q.measure ?: "?"))) food.unitGrams else q.measureGrams
         val total = n * per
-        return QtyResult(total, "${g0(n)} × ${q.measure} (≈ ${g0(per)} g) = ${g0(total)} g")
+        return QtyResult(total, "${g0(n)} × ${q.measure} (≈ ${g0(per)} g) = ${g0(total)} g", "Utiliser ${g0(n)} × ${g0(per)} g = ${g0(total)} g")
     }
     val per = food?.unitGrams ?: return null
     val total = (n * per * 10).roundToInt() / 10.0
     val what = if (q.measure != null && q.measure != "x") "${q.measure} de ${food.name}" else food.name
-    return QtyResult(total, "${g0(n)} × $what (≈ ${g0(per)} g) = ${g0(total)} g")
+    return QtyResult(total, "${g0(n)} × $what (≈ ${g0(per)} g) = ${g0(total)} g", "Utiliser ${g0(n)} × ${g0(per)} g = ${g0(total)} g")
 }
 
 // ---------------------------------------------------------------- recherche

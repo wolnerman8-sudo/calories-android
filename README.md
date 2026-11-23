@@ -126,6 +126,13 @@ Architecture de pilotes (`ScaleDrivers.kt`) : détection automatique d'après l'
 - Liste déroulante : kcal et macros pour 100 g sous chaque nom.
 - « Ajouter » : si les calories sont inconnues, message rouge juste sous le bouton.
 
+## Nouveautés v2.4
+
+- **Champ « Aliment » jamais réécrit pendant la frappe** : le texte, le curseur et la composition du clavier (Samsung, Gboard…) restent exactement ceux tapés. Seul un appui sur un aliment de la liste remplace **tout** le texte par son nom, curseur à la fin (fin du bug « Œuf entier (cru)Œuf entie( »). La liste de suggestions s'affiche maintenant directement sous le champ (plus de fenêtre popup qui prenait le focus du clavier).
+- **Bouton ✕** dans le champ « Aliment » : vide le nom en un appui, ainsi que les valeurs remplies depuis la liste (kcal/100 g, macros, nutriments) ; la quantité tapée ou pesée est gardée.
+- **Le nombre dans le nom ne touche plus à la quantité** : « 2 œufs » ne modifie plus « Quantité g » ni le poids de la balance. Une proposition facultative « Utiliser 2 × 50 g = 100 g » s'affiche ; elle ne s'applique que si tu la touches.
+- **Nom enregistré** : l'aliment de la liste dont viennent les valeurs, sinon le texte tapé.
+
 ## Installer sur ton Samsung (APK)
 
 1. Télécharge `Calories-v1.0.apk` sur le téléphone.

@@ -126,6 +126,12 @@ Architecture de pilotes (`ScaleDrivers.kt`) : détection automatique d'après l'
 - Liste déroulante : kcal et macros pour 100 g sous chaque nom.
 - « Ajouter » : si les calories sont inconnues, message rouge juste sous le bouton.
 
+## Nouveautés v2.7
+
+- **Objectif protéines** dans « Aujourd'hui » : « Protéines : X g / Y g » avec une barre (verte à partir de 85 % de l'objectif, orange sinon). Objectif = poids du profil × 1,4 g/kg (minimum 50 g ; dernière pesée de la balance si le profil n'a pas de poids ; 96 g si aucun poids).
+- Carte **« Répartition conseillée des protéines »** : petit-déjeuner 20-25 g, déjeuner 25-35 g, collation 10-15 g, dîner 25-35 g.
+- Boutons rapides **« + Whey 24 g »** et **« + Whey 25 g »** : ajoutent « Whey (1 dose) » au journal à l'heure actuelle (supprimable comme tout aliment). Hypothèse : whey concentrée ≈ 80 % de protéines, pour 100 g de poudre 400 kcal, G 6,7 g, L 5 g → 24 g de protéines = 30 g de poudre ≈ 120 kcal ; 25 g = 31,25 g ≈ 125 kcal.
+
 ## Nouveautés v2.6
 
 - **Composition corporelle – repères** : zone indicative de masse grasse selon l'âge du profil (22–33 % sans âge ; 20–30 % avant 40 ans ; 25–35 % de 40 à 49 ans ; 26–36 % de 50 à 59 ans ; 27–37 % à partir de 60 ans), avec un message doux si la valeur est au-dessus ou en dessous. Affichée dans la carte « Balance pèse-personne » après une pesée stable, et en carte à part dans Profil (dernière valeur connue).

@@ -198,9 +198,16 @@ fun CaloriesApp(storage: Storage) {
 fun TodayScreen(entries: List<Entry>, goal: Int, onAdd: (Entry) -> Unit, onDelete: (Entry) -> Unit) {
     val todays = entries.filter { it.date == today() }.sortedByDescending { it.id }
     val total = todays.sumOf { it.kcal }
+    // v2.7 : objectif protéines d'après le poids du profil (sinon la dernière pesée de la balance)
+    val ctx = LocalContext.current
+    val profileKg = remember(entries) { Storage(ctx).loadProfile().weightKg }
+    val lastWeighIn = BodyScaleManager.get(ctx).history.firstOrNull()?.kg
+    val proteinGoal = ProteinLogic.proteinGoal(ProteinLogic.currentWeight(profileKg, lastWeighIn))
+    val macros = todays.macros()
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), contentPadding = PaddingValues(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { SummaryCard(total, goal, todays.macros()) }
+        item { SummaryCard(total, goal, macros, proteinGoal) }
+        item { ProteinDistributionHint(proteinGoal) { p -> onAdd(ProteinLogic.wheyEntry(p, System.currentTimeMillis(), today(), nowTime())) } }
         item { AddEntryCard(onAdd) }
         if (todays.isNotEmpty()) item { Text("Repas du jour", style = MaterialTheme.typography.titleMedium) }
         else item { Text("Aucun aliment ajouté aujourd'hui.", color = Color.Gray) }
@@ -209,7 +216,7 @@ fun TodayScreen(entries: List<Entry>, goal: Int, onAdd: (Entry) -> Unit, onDelet
 }
 
 @Composable
-fun SummaryCard(total: Int, goal: Int, macros: Macros) {
+fun SummaryCard(total: Int, goal: Int, macros: Macros, proteinGoal: Int = ProteinLogic.DEFAULT_GOAL) {
     val ratio = if (goal > 0) total.toFloat() / goal else 0f
     val over = total > goal
     Card(Modifier.fillMaxWidth()) {
@@ -229,6 +236,8 @@ fun SummaryCard(total: Int, goal: Int, macros: Macros) {
             Spacer(Modifier.height(10.dp))
             MacroTotals(macros)
             MacroSplitBar(macros)
+            Spacer(Modifier.height(10.dp))
+            ProteinProgress(macros.proteins, proteinGoal)
         }
     }
 }

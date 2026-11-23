@@ -702,7 +702,14 @@ fun ProfileScreen(storage: Storage, goal: Int, entries: List<Entry>, onUseGoal: 
         item { ReminderCard() }
         item { ExportCard(entries, goal) }
         item { HealthConnectCard(entries) { kg -> weight = fmt(kg) } }
-        item { BodyScaleCard { kg -> weight = fmt(kg) } }
+        item { BodyScaleCard(profile.age) { kg -> weight = fmt(kg) } }
+        item {
+            // v2.6 : repères consultables à tout moment, avec la dernière masse grasse / musculaire connue
+            val hist = BodyScaleManager.get(LocalContext.current).history
+            val lastComp = hist.firstOrNull { it.fatPct != null || it.musclePct != null }
+            CompositionGuideCard(age = profile.age, fat = lastComp?.fatPct, muscle = lastComp?.musclePct,
+                measuredAt = lastComp?.timeMs)
+        }
         item { RecognitionSettingsCard() }
         item { AppVersionText(Modifier.padding(top = 4.dp)) }
         item {

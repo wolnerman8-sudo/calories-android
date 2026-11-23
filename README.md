@@ -126,6 +126,11 @@ Architecture de pilotes (`ScaleDrivers.kt`) : détection automatique d'après l'
 - Liste déroulante : kcal et macros pour 100 g sous chaque nom.
 - « Ajouter » : si les calories sont inconnues, message rouge juste sous le bouton.
 
+## Nouveautés v2.6
+
+- **Composition corporelle – repères** : zone indicative de masse grasse selon l'âge du profil (22–33 % sans âge ; 20–30 % avant 40 ans ; 25–35 % de 40 à 49 ans ; 26–36 % de 50 à 59 ans ; 27–37 % à partir de 60 ans), avec un message doux si la valeur est au-dessus ou en dessous. Affichée dans la carte « Balance pèse-personne » après une pesée stable, et en carte à part dans Profil (dernière valeur connue).
+- La masse grasse / musculaire n'apparaît que si la balance la transmet (Chipsea-BLE en connexion, norme 0x2A9C pour la masse grasse) ; les balances « annonce » OKOK n'envoient que poids et impédance → seuls les repères s'affichent.
+
 ## Nouveautés v2.5
 
 - **Balance pèse-personne Bluetooth** (carte « Balance pèse-personne » dans Profil) : Calories lit directement les balances OKOK International / Chipsea, affiche le poids en direct et l'état « Stable », enregistre la pesée (bouton ou automatiquement) et garde les dernières pesées.

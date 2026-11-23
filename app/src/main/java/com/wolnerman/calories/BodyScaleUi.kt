@@ -42,7 +42,7 @@ private fun granted(ctx: Context, perms: Array<String>) =
 
 /** v2.5 : carte « Balance pèse-personne » (OKOK International / Chipsea…) de l'onglet Profil. */
 @Composable
-fun BodyScaleCard(onUseWeight: (Double) -> Unit) {
+fun BodyScaleCard(age: Int?, onUseWeight: (Double) -> Unit) {
     val ctx = LocalContext.current
     val mgr = remember { BodyScaleManager.get(ctx) }
     var auto by remember { mutableStateOf(mgr.store.autoSave) }
@@ -101,7 +101,7 @@ fun BodyScaleCard(onUseWeight: (Double) -> Unit) {
                     }
                 }
                 r.extra?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                Button(onClick = { mgr.record(r.kg, r.protocol) }, enabled = r.stable == true, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = { mgr.record(r) }, enabled = r.stable == true, modifier = Modifier.fillMaxWidth()) {
                     Text("Enregistrer cette pesée")
                 }
             }
@@ -116,6 +116,12 @@ fun BodyScaleCard(onUseWeight: (Double) -> Unit) {
             }
             mgr.saveMsg?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold,
                 color = if (it.contains("pas dans Santé Connect") || it.contains("erreur")) Color(0xFFB26A00) else Color(0xFF2E7D32)) }
+            // v2.6 : repères de composition après une pesée stable / enregistrée, avec les valeurs de CETTE mesure
+            val saved = mgr.lastSaved
+            if (r?.stable == true || saved != null) {
+                val (fat, muscle) = if (r?.stable == true) compositionOf(r) else (saved!!.fatPct to saved.musclePct)
+                CompositionGuideCard(age = age, fat = fat, muscle = muscle)
+            }
             if (mgr.needsHealthPermission) OutlinedButton(onClick = {
                 runCatching { hcLauncher.launch(setOf(HealthSync.WRITE_WEIGHT, HealthSync.READ_WEIGHT)) }
                     .onFailure { permMsg = "Impossible d'ouvrir Santé Connect : ${it.message}" }

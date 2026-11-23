@@ -39,12 +39,17 @@ class BodyScaleStore(ctx: Context) {
 
     fun list(): List<WeighIn> = runCatching {
         val a = JSONArray(p.getString("log", "[]"))
-        (0 until a.length()).map { i -> a.getJSONObject(i).let { o -> WeighIn(o.getLong("t"), o.getDouble("kg"), o.optString("p"), o.optString("hc")) } }
+        (0 until a.length()).map { i -> a.getJSONObject(i).let { o -> WeighIn(o.getLong("t"), o.getDouble("kg"), o.optString("p"), o.optString("hc"),
+            o.optDouble("fat").takeIf { !it.isNaN() }, o.optDouble("mus").takeIf { !it.isNaN() }) } }
     }.getOrDefault(emptyList())
 
     private fun save(l: List<WeighIn>) {
         val a = JSONArray()
-        l.sortedByDescending { it.timeMs }.take(50).forEach { w -> a.put(JSONObject().put("t", w.timeMs).put("kg", w.kg).put("p", w.protocol).put("hc", w.health)) }
+        l.sortedByDescending { it.timeMs }.take(50).forEach { w ->
+            val o = JSONObject().put("t", w.timeMs).put("kg", w.kg).put("p", w.protocol).put("hc", w.health)
+            w.fatPct?.let { o.put("fat", it) }; w.musclePct?.let { o.put("mus", it) }
+            a.put(o)
+        }
         p.edit().putString("log", a.toString()).apply()
     }
 
@@ -340,13 +345,15 @@ class BodyScaleManager private constructor(private val ctx: Context) {
         addLog("   = ${raw.kg} kg${if (raw.stable == true) " stable" else ""} (${raw.protocol})${raw.extra?.let { " · $it" } ?: ""}")
         if (r != null) live = r else if (raw.kg < BodyPlausible.MIN_KG) live = null
         val toSave = session.onFrame(raw.kg, stable, now)
-        if (toSave != null && store.autoSave) record(toSave, raw.protocol, auto = true)
+        if (toSave != null && store.autoSave) record(r ?: raw, auto = true)
     }
 
     /** Enregistre une pesée (bouton ou automatique) puis l'écrit dans Santé Connect. */
-    fun record(kg: Double, protocol: String, auto: Boolean = false) {
+    fun record(r: BodyReading, auto: Boolean = false) {
         val now = System.currentTimeMillis()
-        val w = WeighIn(now, BodyUnits.round2(kg), protocol)
+        val (fat, mus) = compositionOf(r)
+        val w = WeighIn(now, BodyUnits.round2(r.kg), r.protocol, fatPct = fat, musclePct = mus)
+        val protocol = r.protocol
         session.markSaved()
         if (!store.add(w)) { saveMsg = "Déjà enregistré : ${WeighInRules.fmtKg(w.kg)} (même poids il y a moins de 2 min)."; return }
         history = store.list(); lastSaved = w

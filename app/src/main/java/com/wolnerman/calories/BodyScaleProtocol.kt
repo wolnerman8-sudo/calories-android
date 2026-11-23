@@ -27,6 +27,8 @@ data class BodyReading(
     val protocol: String,
     val impedanceOhm: Double? = null,
     val extra: String? = null,
+    val fatPct: Double? = null,      // v2.6 : masse grasse % calculée PAR LA BALANCE (null si elle ne l'envoie pas)
+    val musclePct: Double? = null,   // v2.6 : masse musculaire %
 )
 
 /** Données fabricant d'une annonce : identifiant (petit-boutiste, comme Android) + octets suivants. */
@@ -192,7 +194,9 @@ class ChipseaGatt {
         val locked = p and 1 != 0
         val extra = if (locked && f.size >= 18) String.format(Locale.FRENCH, "graisse %.1f %% · eau %.1f %% · muscle %.1f %%",
             u16be(f, 7) / 10.0, u16be(f, 9) / 10.0, u16be(f, 11) / 10.0) else null
-        return BodyReading(kg, locked, "Chipsea-BLE", extra = extra)
+        val comp = locked && f.size >= 18
+        return BodyReading(kg, locked, "Chipsea-BLE", extra = extra,
+            fatPct = if (comp) u16be(f, 7) / 10.0 else null, musclePct = if (comp) u16be(f, 11) / 10.0 else null)
     }
 
     private fun v11(f: ByteArray): BodyReading? = when (val sub = u8(f, 3)) {
@@ -209,10 +213,11 @@ class ChipseaGatt {
         val locked = prop and 1 != 0
         val extra = buildString {
             if (isHistory) append("historique")
-            if (locked) { if (isNotEmpty()) append(" · "); append(String.format(Locale.FRENCH, "graisse %.1f %%", u16be(p, 12) / 10.0)) }
+            if (locked) { if (isNotEmpty()) append(" · "); append(String.format(Locale.FRENCH, "graisse %.1f %% · muscle %.1f %%", u16be(p, 12) / 10.0, u16be(p, 16) / 10.0)) }
         }.ifEmpty { null }
         // Une mesure d'historique (ancienne) n'est jamais considérée comme une pesée en cours.
-        return BodyReading(kg, if (isHistory) false else locked, "Chipsea-BLE v1.1", extra = extra)
+        return BodyReading(kg, if (isHistory) false else locked, "Chipsea-BLE v1.1", extra = extra,
+            fatPct = if (locked) u16be(p, 12) / 10.0 else null, musclePct = if (locked) u16be(p, 16) / 10.0 else null)
     }
 
     /** [2] = longueur du morceau + 2, [4] = (index << 4) | total (index à partir de 1), données à partir de [5]. */
@@ -253,7 +258,8 @@ class ChipseaGatt {
 object BodySig {
     fun decode(char16: String, v: ByteArray): BodyReading? = when (char16.uppercase(Locale.ROOT)) {
         "2A9D" -> SigScale.decodeWeightMeasurement(v)?.grams?.let { BodyReading(BodyUnits.round2(it / 1000.0), true, "Bluetooth SIG 0x2A9D") }
-        "2A9C" -> SigScale.decodeBodyComposition(v)?.let { w -> w.grams?.let { BodyReading(BodyUnits.round2(it / 1000.0), true, "Bluetooth SIG 0x2A9C", extra = w.extra) } }
+        "2A9C" -> SigScale.decodeBodyComposition(v)?.let { w -> w.grams?.let { BodyReading(BodyUnits.round2(it / 1000.0), true, "Bluetooth SIG 0x2A9C", extra = w.extra,
+            fatPct = ((v[2].toInt() and 0xFF) or ((v[3].toInt() and 0xFF) shl 8)) / 10.0) } }
         else -> null
     }
 }
@@ -346,7 +352,8 @@ class WeighInSession(private val rearmMs: Long = 30_000) {
     fun markSaved() { armed = false }
 }
 
-data class WeighIn(val timeMs: Long, val kg: Double, val protocol: String, val health: String = "")
+data class WeighIn(val timeMs: Long, val kg: Double, val protocol: String, val health: String = "",
+                   val fatPct: Double? = null, val musclePct: Double? = null)
 
 object WeighInRules {
     const val DEDUPE_MS = 2 * 60_000L

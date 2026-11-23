@@ -156,7 +156,7 @@ class ScaleManager(private val ctx: Context) {
         scanning = true
         status = ScaleStatus.SCANNING
         message = "Recherche des balances… Allume ta balance (appuie sur une touche) et garde-la près du téléphone."
-        addLog("Début du scan (Android ${Build.VERSION.SDK_INT}, Calories 1.5)")
+        addLog("Début du scan (Android ${Build.VERSION.SDK_INT}, Calories 1.6)")
         try {
             scanner.startScan(null, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), scanCb)
         } catch (t: Throwable) { scanning = false; fail("Impossible de lancer la recherche : ${t.message}"); return }

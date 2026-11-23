@@ -134,21 +134,29 @@ object ScaleDecoder {
     fun a6Type(data: ByteArray): Int? =
         if (data.size >= 3 && (data[0].toInt() and 0xFF) == AiLinkProtocol.A6_HEAD) data[2].toInt() and 0xFF else null
 
+    /** Layout sans numéro de séquence (payload de 8 octets) : CID 0x008A (balance FS5H / Zhongshan Kangnuo). */
+    const val CID_KITCHEN_8A = 0x008A
+
     /**
-     * Décode un payload A7 EN CLAIR de type poids (CID 0x0034 / 0x006C et compatibles) :
-     * [0]=0x01 [1]=n° de séquence [2..4]=poids (gros-boutiste) [5]=unité [6]=décimales [7]=signe [8]=1 temps réel / 2 stable
+     * Décode un payload A7 EN CLAIR de type poids.
+     *  - Layout « avec séquence » (doc Elink营养秤, CID 0x0034 / 0x006C, 9 octets) :
+     *    [0]=0x01 [1]=séquence [2..4]=poids BE [5]=unité [6]=décimales [7]=signe [8]=1 temps réel / 2 stable
+     *  - Layout « sans séquence » (CID 0x008A, 8 octets, vu sur la vraie balance FS5H) :
+     *    [0]=0x01 [1..3]=poids BE [4]=unité [5]=décimales [6]=signe [7]=1 temps réel / 2 stable
      */
-    fun decodeWeight(p: ByteArray): AiLinkReading? {
+    fun decodeWeight(p: ByteArray, cid: Int = -1): AiLinkReading? {
+        val noSeq = cid == CID_KITCHEN_8A || (cid != AiLinkProtocol.CID_NUTRITION && cid != AiLinkProtocol.CID_NUTRITION_NUTRIENT && p.size == 8)
+        val o = if (noSeq) 0 else 1   // décalage dû au numéro de séquence
         if (p.size < 8) return null
         if ((p[0].toInt() and 0xFF) != AiLinkProtocol.TYPE_WEIGHT) return null
-        val raw = ((p[2].toInt() and 0xFF) shl 16) or ((p[3].toInt() and 0xFF) shl 8) or (p[4].toInt() and 0xFF)
-        val unit = p[5].toInt() and 0xFF
-        val dec = p[6].toInt() and 0xFF
-        val sign = p[7].toInt() and 0xFF
-        val type = if (p.size >= 9) p[8].toInt() and 0xFF else 0
+        fun u(i: Int) = p[i].toInt() and 0xFF
+        val raw = (u(1 + o) shl 16) or (u(2 + o) shl 8) or u(3 + o)
+        val unit = u(4 + o); val dec = u(5 + o); val sign = u(6 + o)
+        val kindIdx = 7 + o
+        val kind = if (p.size > kindIdx) u(kindIdx) else 0
         if (unit > 0x0A || dec > 3 || sign > 1) return null
-        if (p.size >= 9 && type != 1 && type != 2) return null
-        return AiLinkReading(p[1].toInt() and 0xFF, raw, unit, dec, sign == 1, type == 2)
+        if (p.size > kindIdx && kind != 1 && kind != 2) return null
+        return AiLinkReading(if (noSeq) -1 else u(1), raw, unit, dec, sign == 1, kind == 2)
     }
 
     /**
@@ -158,7 +166,7 @@ object ScaleDecoder {
     fun decodeNotification(data: ByteArray, decrypt: ((Int, ByteArray) -> ByteArray?)?): List<Pair<A7Frame, AiLinkReading?>> =
         splitA7(data).map { f ->
             val dec = if (f.checksumOk) decrypt?.let { runCatching { it(f.cid, f.payload.copyOf()) }.getOrNull() } else null
-            val r = dec?.let { decodeWeight(it) } ?: decodeWeight(f.payload)
+            val r = dec?.let { decodeWeight(it, f.cid) } ?: decodeWeight(f.payload, f.cid)
             f to r
         }
 

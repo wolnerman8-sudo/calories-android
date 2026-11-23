@@ -35,12 +35,15 @@ object AiLinkCipher {
 
 /** Champs bruts d'un payload poids (pour le journal), même s'ils sont incohérents. */
 data class AiLinkFields(val type: Int, val seq: Int, val raw: Int, val unit: Int, val dec: Int, val sign: Int, val kind: Int) {
-    override fun toString() = "type=%02X seq=%d poids=%d unité=%02X déc=%d signe=%d donnée=%d".format(type, seq, raw, unit, dec, sign, kind)
+    override fun toString() = (if (seq >= 0) "type=%02X seq=%d " else "type=%02X ").format(type, seq) +
+        "poids=%d unité=%02X déc=%d signe=%d état=%s".format(raw, unit, dec, sign, when (kind) { 1 -> "1 (en mesure)"; 2 -> "2 (stable)"; else -> kind.toString() })
     companion object {
-        fun of(p: ByteArray): AiLinkFields? {
+        fun of(p: ByteArray, cid: Int = -1): AiLinkFields? {
             if (p.size < 8) return null
             fun u(i: Int) = p[i].toInt() and 0xFF
-            return AiLinkFields(u(0), u(1), (u(2) shl 16) or (u(3) shl 8) or u(4), u(5), u(6), u(7), if (p.size >= 9) u(8) else -1)
+            val noSeq = cid == ScaleDecoder.CID_KITCHEN_8A || (cid != AiLinkProtocol.CID_NUTRITION && cid != AiLinkProtocol.CID_NUTRITION_NUTRIENT && p.size == 8)
+            return if (noSeq) AiLinkFields(u(0), -1, (u(1) shl 16) or (u(2) shl 8) or u(3), u(4), u(5), u(6), u(7))
+            else AiLinkFields(u(0), u(1), (u(2) shl 16) or (u(3) shl 8) or u(4), u(5), u(6), u(7), if (p.size >= 9) u(8) else -1)
         }
     }
 }
@@ -71,8 +74,8 @@ class AiLinkKeyPicker(candidates: List<Pair<String, ByteArray?>>) {
     fun evaluate(cid: Int, payload: ByteArray): List<Eval> {
         val list = (locked?.let { listOf(it) } ?: cands).map { c ->
             val clear = clear(c, cid, payload)
-            val f = AiLinkFields.of(clear)
-            val r = ScaleDecoder.decodeWeight(clear)
+            val f = AiLinkFields.of(clear, cid)
+            val r = ScaleDecoder.decodeWeight(clear, cid)
             var d = 0
             if (f == null || f.type != AiLinkProtocol.TYPE_WEIGHT) {
                 d = 0 // autre type de trame : neutre
@@ -82,7 +85,7 @@ class AiLinkKeyPicker(candidates: List<Pair<String, ByteArray?>>) {
                 val g = r.grams
                 if (g != null && kotlin.math.abs(g) <= 10_500) d += 1 else d -= 3
                 if (!r.negative) d += 1 else d -= 1
-                if (c.lastSeq >= 0) { val ds = (r.seq - c.lastSeq + 256) % 256; d += if (ds <= 1) 2 else -1 }
+                if (c.lastSeq >= 0 && r.seq >= 0) { val ds = (r.seq - c.lastSeq + 256) % 256; d += if (ds <= 1) 2 else -1 }
                 if (c.lastDec >= 0) d += if (c.lastDec == r.decimals) 1 else -2
             }
             Eval(c, clear, f, r, d)
@@ -99,6 +102,8 @@ class AiLinkKeyPicker(candidates: List<Pair<String, ByteArray?>>) {
             val best = sorted.first()
             val second = sorted.getOrNull(1)?.score ?: Int.MIN_VALUE
             if (best.frames >= 6 && best.score >= 20 && best.score - second >= 6) locked = best
+            // Verrouillage rapide : 3 trames valides pour une hypothèse (la première de la liste gagne les égalités, ex. « MAC annonce ») et aucune autre crédible
+            else if (best.frames >= 3 && best.score >= 12 && second <= 0) locked = best
         } else {
             list.forEach { e -> e.reading?.let { e.cand.lastSeq = it.seq; e.cand.lastDec = it.decimals } }
         }

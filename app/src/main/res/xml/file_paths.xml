@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <files-path name="photos" path="photos/" />
+    <!-- Exports CSV / JSON partagés (v2.2), recréés à chaque export -->
+    <cache-path name="exports" path="exports/" />
 </paths>

@@ -55,6 +55,8 @@ class MainActivity : ComponentActivity() {
         val storage = Storage(applicationContext)
         // v2.0 : range une clé API collée dans le mauvais champ (ex. clé Groq dans Gemini) — une seule fois
         runCatching { SecureSettings(applicationContext).migrateV2() }
+        // v2.2 : (re)programme le rappel du soir (au cas où l'alarme aurait été perdue, ex. arrêt forcé)
+        runCatching { ReminderScheduler.schedule(applicationContext) }
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = Color(0xFF2E7D32), secondary = Color(0xFFFFB300))) {
                 Surface(Modifier.fillMaxSize()) { CaloriesApp(storage) }
@@ -88,7 +90,7 @@ private fun prettyDate(iso: String): String {
 fun CaloriesApp(storage: Storage) {
     var entries by remember { mutableStateOf(storage.loadEntries()) }
     var goal by remember { mutableIntStateOf(storage.dailyGoal) }
-    var tab by remember { mutableIntStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(0) }
     var showGoalDialog by remember { mutableStateOf(false) }
     var toDelete by remember { mutableStateOf<Entry?>(null) }
 
@@ -131,8 +133,10 @@ fun CaloriesApp(storage: Storage) {
                     icon = { Text("🍽") }, label = { Text("Aujourd'hui") })
                 NavigationBarItem(selected = tab == 1, onClick = { tab = 1 },
                     icon = { Text("📅") }, label = { Text("Historique") })
+                NavigationBarItem(selected = tab == 4, onClick = { tab = 4 },
+                    icon = { Text("📊") }, label = { Text("Graphiques", maxLines = 1, softWrap = false) })
                 NavigationBarItem(selected = tab == 3, onClick = { tab = 3 },
-                    icon = { Text("🥦") }, label = { Text("Nutriments") })
+                    icon = { Text("🥦") }, label = { Text("Nutriments", maxLines = 1, softWrap = false) })
                 NavigationBarItem(selected = tab == 2, onClick = { tab = 2 },
                     icon = { Text("👤") }, label = { Text("Profil") })
             }
@@ -142,6 +146,7 @@ fun CaloriesApp(storage: Storage) {
             if (tab == 0) TodayScreen(entries, goal,
                 onAdd = { update(entries + it); syncHealth(added = listOf(it)) }, onDelete = { toDelete = it })
             else if (tab == 1) HistoryScreen(entries, goal, onDelete = { toDelete = it })
+            else if (tab == 4) ChartsScreen(entries, goal)
             else if (tab == 3) NutrientsScreen(entries, goal, storage.loadProfile().male)
             else ProfileScreen(storage, goal, entries, onUseGoal = { goal = it; storage.dailyGoal = it })
         }
@@ -654,6 +659,8 @@ fun ProfileScreen(storage: Storage, goal: Int, entries: List<Entry>, onUseGoal: 
                 }
             }
         }
+        item { ReminderCard() }
+        item { ExportCard(entries, goal) }
         item { HealthConnectCard(entries) { kg -> weight = fmt(kg) } }
         item { RecognitionSettingsCard() }
         item { AppVersionText(Modifier.padding(top = 4.dp)) }

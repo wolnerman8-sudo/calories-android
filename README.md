@@ -115,6 +115,11 @@ Architecture de pilotes (`ScaleDrivers.kt`) : détection automatique d'après l'
 - Migration (une fois) : une clé rangée dans le mauvais champ (ex. clé Groq dans Gemini en v1.8) est déplacée vers le bon service, qui devient le service choisi.
 - JSON robuste : blocs `<think>` et ```` ```json ```` retirés avant analyse. Version affichée en haut et en bas de Profil.
 
+## Export, graphiques et rappel du soir (v2.2)
+- **Export des données** (Profil › Export des données) : « Exporter les repas (CSV) » = une ligne par aliment (date, heure, aliment, quantité, kcal/100 g, kcal, glucides, protéines, lipides, tous les nutriments, fermenté/prébiotique). « Bilan par jour (CSV) » = total kcal, objectif, écart et macros par jour renseigné. « Tout (JSON) » = sauvegarde complète. CSV en UTF-8 avec BOM, séparateur « ; », virgule décimale : s'ouvre tel quel dans Excel / LibreOffice en français. Envoi via la feuille de partage Android (mail, Drive, WhatsApp…).
+- **Onglet « Graphiques »** : période 1, 2, 4, 8 ou 12 semaines avec ◀ / ▶ pour remonter dans le temps. En 1 semaine : du lundi au dimanche, chaque jour étiqueté (lun., mar., …). Calories par jour (vert ≤ objectif, rouge au-dessus, ligne bleue = objectif), macros empilées (G/P/L), moyenne par semaine (2 semaines et plus), résumé (moyenne kcal/jour, jours dans l'objectif, jours renseignés). Les jours sans saisie sont un trou (pas un zéro). Toucher une barre ou un jour de la liste affiche le détail : total vs objectif, macros et aliments du jour.
+- **Rappel du soir** (Profil) : interrupteur + heure (20:00 par défaut). Chaque jour à cette heure, si le total du jour est sous l'objectif : « Il te manque X kcal pour atteindre ton objectif de Y kcal aujourd'hui. » Objectif atteint = pas de notification. 100 % local (AlarmManager, reprogrammé chaque jour et après redémarrage). Toucher la notification ouvre l'appli sur « Aujourd'hui ». Bouton « Tester la notification ». Android 13+ demande l'autorisation des notifications à l'activation.
+
 ## Installer sur ton Samsung (APK)
 
 1. Télécharge `Calories-v1.0.apk` sur le téléphone.

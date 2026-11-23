@@ -18,8 +18,10 @@ android {
         applicationId = "com.wolnerman.calories"
         minSdk = 24
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.6"
+        versionCode = 8
+        versionName = "1.7"
+        // Téléphones ARM uniquement (le moteur TFLite pèse ~3-6 Mo par architecture)
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     signingConfigs {
@@ -51,11 +53,17 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
-    packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
+    packaging {
+        resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+        jniLibs { useLegacyPackaging = true } // .so compressées : APK ~4 Mo plus léger à télécharger
+    }
+    // Modèle hors-ligne lu par mmap : doit rester non compressé dans l'APK
+    androidResources { noCompress += "tflite" }
 }
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303") // org.json réel pour les tests JVM (Android n'a que des bouchons)
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
@@ -67,5 +75,6 @@ dependencies {
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("com.google.ai.edge.litert:litert:1.4.2") // reconnaissance hors-ligne (Interpreter TFLite)
     implementation("com.github.elinkthings:AILinkSecretAndroid:2.0.0") { isTransitive = false }
 }

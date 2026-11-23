@@ -70,6 +70,20 @@ Architecture de pilotes (`ScaleDrivers.kt`) : détection automatique d'après l'
 | Etekcity Smart Nutrition Scale ESN00 | déduit (rétro-ingénierie publique, MIT) | github.com/hertzg/metekcity |
 | Tout autre appareil | journal seulement | connexion possible, trames brutes dans le journal technique |
 
+## Reconnaissance des aliments par photo (v1.7)
+
+- Après **📸 Photo** ou **🖼 Galerie**, l'appli lance automatiquement la reconnaissance (bouton **🔍 Reconnaître l'aliment** pour relancer).
+  Toucher une suggestion remplit *Aliment* + *kcal/100 g* (et les macros si l'aliment est dans la base intégrée) ;
+  la quantité vient de la balance si elle est connectée et stable, sinon de l'estimation de Gemini. Rien n'est ajouté sans **Ajouter**.
+- **En ligne : Google Gemini** (REST `generateContent`, `responseMimeType: application/json`, photo réduite à 768 px).
+  Modèles essayés dans l'ordre (passage au suivant si 404) : `gemini-3.5-flash-lite`, `gemini-3.6-flash`, `gemini-flash-latest`.
+- **Hors-ligne : Google AIY Food V1** (TFLite quantifié, 2023 plats, licence Apache 2.0, ~21 Mo, `app/src/main/assets/`),
+  exécuté avec LiteRT 1.4.2. Étiquettes anglaises traduites en français pour les plats courants (`FoodLabels.kt`), sinon affichées en anglais.
+  Utilisé sans clé, sans réseau ou si Gemini échoue ; résultats marqués « hors-ligne, moins précis ».
+- **Clé API** : onglet **Profil › Reconnaissance par photo** (interrupteur, « Coller la clé API Gemini », « Enregistrer la clé », « Effacer la clé »).
+  La clé est chiffrée (AES-256-GCM, clé dans l'Android Keystore) et n'est jamais dans le code ni dans ce dépôt.
+  Offre gratuite : Google peut utiliser les photos envoyées pour améliorer ses produits.
+
 ## Installer sur ton Samsung (APK)
 
 1. Télécharge `Calories-v1.0.apk` sur le téléphone.

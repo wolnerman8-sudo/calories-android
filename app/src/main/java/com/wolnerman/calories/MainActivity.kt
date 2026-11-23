@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
 
 private fun today(): String = LocalDate.now().toString()
 private fun nowTime(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-private fun fmt(d: Double): String = if (d % 1.0 == 0.0) d.toInt().toString() else String.format(Locale.FRENCH, "%.1f", d).replace(',', '.')
+internal fun fmt(d: Double): String = if (d % 1.0 == 0.0) d.toInt().toString() else String.format(Locale.FRENCH, "%.1f", d).replace(',', '.')
 private fun g1(d: Double): String = String.format(Locale.FRENCH, "%.1f", d)
 
 private fun prettyDate(iso: String): String {
@@ -430,6 +430,22 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     TextButton(onClick = { setPhoto(null) }) { Text("Retirer") }
                 }
             }
+            RecognitionPanel(photoPath) { g ->
+                // Remplit le formulaire (sans rien ajouter au journal : l'utilisateur confirme avec « Ajouter »)
+                scanned = null; scanMsg = null
+                if (g.food != null) fillFood(g.food) else {
+                    clearAuto()
+                    g.kcal100?.let { kcal100 = fmt(Math.round(it).toDouble()) }
+                }
+                name = g.name
+                // Quantité : balance connectée et stable en priorité, sinon estimation de Gemini
+                val r = ScaleManager.get(context).let { m -> if (m.status == ScaleStatus.CONNECTED) m.reading else null }
+                val scaleG = r?.grams?.takeIf { r.stable && it > 0 }
+                when {
+                    scaleG != null -> grams = fmt(Math.round(scaleG * 10.0) / 10.0)
+                    g.grams != null -> grams = fmt(g.grams)
+                }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(if (calc != null) "= ${calc.kcal} kcal" else (problem ?: ""),
                     style = if (calc != null) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodySmall,
@@ -576,6 +592,7 @@ fun ProfileScreen(storage: Storage, goal: Int, onUseGoal: (Int) -> Unit) {
                 }
             }
         }
+        item { RecognitionSettingsCard() }
     }
 }
 

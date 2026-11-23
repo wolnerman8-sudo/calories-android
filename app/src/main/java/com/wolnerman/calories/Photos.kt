@@ -67,5 +67,18 @@ object Photos {
         BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
     } catch (e: Exception) { null }
 
+    /** JPEG réduit (côté max [maxSide] px, qualité 80) encodé en base64, pour l'envoi à Gemini. */
+    fun jpegBase64(path: String, maxSide: Int = 768): String? = try {
+        var bmp = load(path, maxSide * 2) ?: throw IllegalStateException()
+        val scale = maxSide.toFloat() / max(bmp.width, bmp.height)
+        if (scale < 1f) {
+            val out = Bitmap.createScaledBitmap(bmp, (bmp.width * scale).roundToInt(), (bmp.height * scale).roundToInt(), true)
+            if (out != bmp) bmp.recycle(); bmp = out
+        }
+        val bos = java.io.ByteArrayOutputStream()
+        bmp.compress(Bitmap.CompressFormat.JPEG, QUALITY, bos); bmp.recycle()
+        android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP)
+    } catch (e: Exception) { null }
+
     fun delete(path: String?) { if (path != null) runCatching { File(path).delete() } }
 }

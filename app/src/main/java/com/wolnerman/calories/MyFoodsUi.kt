@@ -72,14 +72,14 @@ private fun MyFoodDialog(c: CustomFood, onDismiss: () -> Unit, onSave: (CustomFo
                     OutlinedTextField(prot, { prot = it.take(6) }, label = { Text("P") }, singleLine = true, keyboardOptions = dec, modifier = Modifier.weight(1f))
                     OutlinedTextField(fat, { fat = it.take(6) }, label = { Text("L") }, singleLine = true, keyboardOptions = dec, modifier = Modifier.weight(1f))
                 }
-                val derived = if (kcal.isBlank()) KcalLogic.fromMacros(parseNum(carbs), parseNum(prot), parseNum(fat)) else null
-                derived?.let { Text("≈ ${fmt(it)} kcal/100 g d'après G/P/L", style = MaterialTheme.typography.bodySmall, color = Color(0xFF2E7D32)) }
+                val derived = KcalLogic.effective(kcal, carbs, prot, fat, macrosByUser = true, fromSource = false).takeIf { it.computed }?.kcal100
+                derived?.let { Text("= ${fmt(it)} kcal/100 g calculées depuis G/P/L (prioritaires)", style = MaterialTheme.typography.bodySmall, color = Color(0xFF2E7D32)) }
             }
         },
         confirmButton = {
             TextButton(enabled = name.isNotBlank(), onClick = {
                 val c2 = parseNum(carbs)?.takeIf { it >= 0 }; val p2 = parseNum(prot)?.takeIf { it >= 0 }; val f2 = parseNum(fat)?.takeIf { it >= 0 }
-                val k = parseNum(kcal)?.takeIf { it in 0.0..1000.0 } ?: KcalLogic.fromMacros(c2, p2, f2)
+                val k = KcalLogic.fromMacros(c2, p2, f2) ?: parseNum(kcal)?.takeIf { it in 0.0..1000.0 }
                 onSave(CustomFood(name.trim(), k, c2, p2, f2, System.currentTimeMillis()))
             }) { Text("Enregistrer") }
         },

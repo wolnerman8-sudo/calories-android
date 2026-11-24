@@ -22,6 +22,7 @@ data class FoodForm(
     val autoFrom: String? = null,      // aliment de la liste dont viennent kcal/macros (null = saisie libre / scan)
     val picked: Boolean = false,       // choisi explicitement dans la liste
     val pendingQty: QtyParse? = null,  // quantité tapée avant un choix dans la liste (« 2 œufs » → Œuf dur)
+    val macrosByUser: Boolean = false, // v2.9 : G/P/L tapés par l'utilisateur → kcal calculées prioritaires
 ) {
     val text: String get() = name.text
 }
@@ -31,11 +32,11 @@ object FoodFormLogic {
 
     /** Copie kcal et macros d'un aliment de la liste (ne touche ni au nom ni à la quantité). */
     fun fill(s: FoodForm, f: Food) = s.copy(kcal100 = if (f.kcalPer100g >= 0) f.kcalPer100g.toString() else "", carbs100 = num(f.carbs),
-        prot100 = num(f.proteins), fat100 = num(f.fat), autoFrom = f.name)
+        prot100 = num(f.proteins), fat100 = num(f.fat), autoFrom = f.name, macrosByUser = false)
 
     /** Retire les valeurs venues de la liste (pas celles tapées à la main). */
     fun unfill(s: FoodForm) = if (s.autoFrom == null) s
-        else s.copy(kcal100 = "", carbs100 = "", prot100 = "", fat100 = "", autoFrom = null, picked = false)
+        else s.copy(kcal100 = "", carbs100 = "", prot100 = "", fat100 = "", autoFrom = null, picked = false, macrosByUser = false)
 
     /**
      * Frappe dans « Aliment » : le TextFieldValue du clavier est gardé tel quel (jamais réécrit).
@@ -63,6 +64,12 @@ object FoodFormLogic {
 
     /** Bouton ✕ : vide le nom et les valeurs venues de la liste ; garde la quantité (tapée ou balance). */
     fun clear(s: FoodForm) = unfill(s).copy(name = TextFieldValue(""), picked = false, pendingQty = null)
+
+    /** v2.9 : saisie dans G, P ou L ('G'/'P'/'L') : les valeurs deviennent « tapées », les kcal seront calculées. */
+    fun typeMacro(s: FoodForm, which: Char, txt: String): FoodForm {
+        val n = when (which) { 'G' -> s.copy(carbs100 = txt); 'P' -> s.copy(prot100 = txt); else -> s.copy(fat100 = txt) }
+        return n.copy(autoFrom = null, picked = false, macrosByUser = true)
+    }
 
     fun typeGrams(s: FoodForm, txt: String) = s.copy(grams = txt, gramsBy = GramsSource.USER)
     fun scale(s: FoodForm, g: Double) = s.copy(grams = fmt(Math.round(g * 10.0) / 10.0), gramsBy = GramsSource.SCALE)
@@ -127,6 +134,24 @@ object KcalLogic {
         if (carbs == null && proteins == null && fat == null) return null
         val k = (carbs ?: 0.0) * 4 + (proteins ?: 0.0) * 4 + (fat ?: 0.0) * 9
         return Math.round(k * 10.0) / 10.0
+    }
+
+    /** Résultat du choix des kcal/100 g utilisées. */
+    data class Kcal(val kcal100: Double?, val computed: Boolean, val typed: Double?, val typedIgnored: Boolean)
+
+    /**
+     * v2.9 : kcal/100 g utilisées. Dès que G, P ou L est renseigné, kcal = G×4 + P×4 + L×9 (champs vides = 0) et
+     * cette valeur est PRIORITAIRE sur les kcal tapées. Exception : valeurs venant telles quelles d'un aliment de la
+     * liste ou d'un scan ([fromSource]) tant que l'utilisateur n'a pas modifié G/P/L ([macrosByUser]) : on garde
+     * alors les kcal de la source (qui tiennent compte des fibres, de l'alcool…).
+     */
+    fun effective(kcalTxt: String, carbsTxt: String, protTxt: String, fatTxt: String, macrosByUser: Boolean, fromSource: Boolean): Kcal {
+        val typed = parseNum(kcalTxt).takeIf { kcalTxt.isNotBlank() }
+        val computed = fromMacros(parseNum(carbsTxt).takeIf { carbsTxt.isNotBlank() }, parseNum(protTxt).takeIf { protTxt.isNotBlank() },
+            parseNum(fatTxt).takeIf { fatTxt.isNotBlank() })
+        val useComputed = computed != null && (macrosByUser || !fromSource || typed == null)
+        return if (useComputed) Kcal(computed, true, typed, typed != null && kotlin.math.abs(typed - computed!!) >= 0.5)
+        else Kcal(typed, false, typed, false)
     }
 
     /** Ajout « poids seul » possible : nom et quantité valides, seules les kcal manquent. */

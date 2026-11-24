@@ -314,7 +314,7 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     prot100 = r.product.proteins?.let { fmt(it) } ?: ""
                     fat100 = r.product.fat?.let { fmt(it) } ?: ""
                     fillNutr(r.product.nutr); fermented = r.product.fermented; prebiotic = r.product.prebiotic
-                    autoFrom = null
+                    autoFrom = null; form = form.copy(macrosByUser = false)
                     if (r.product.kcalPer100g == null) scanMsg = "Calories non renseignées pour ce produit : saisis les kcal/100 g (voir l'étiquette)."
                 }
                 is LookupResult.Error -> scanMsg = r.message
@@ -366,8 +366,10 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
     val suggestions = remember(name) { suggestFoods(name) }
     val g = parseNum(grams)
     // v2.8 : kcal vides mais G/P/L connus → kcal/100 g estimées (4/4/9)
-    val derivedKcal = if (kcal100.isBlank()) KcalLogic.fromMacros(parseNum(carbs100), parseNum(prot100), parseNum(fat100)) else null
-    val kcalEff = derivedKcal?.let { fmt(it) } ?: kcal100
+    // v2.9 : dès que G/P/L sont renseignés, kcal/100 g = G×4 + P×4 + L×9, prioritaires sur la valeur tapée
+    val kcalRes = KcalLogic.effective(kcal100, carbs100, prot100, fat100, form.macrosByUser, fromSource = autoFrom != null || scanned != null)
+    val derivedKcal = kcalRes.kcal100?.takeIf { kcalRes.computed }
+    val kcalEff = kcalRes.kcal100?.let { if (kcalRes.computed) fmt(it) else kcal100 } ?: kcal100
     val k = parseNum(kcalEff)
     val calc = calculate(g, k, parseNum(carbs100), parseNum(prot100), parseNum(fat100))
     val weightOnly = KcalLogic.canAddWeightOnly(name, grams, kcalEff)
@@ -470,10 +472,13 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                 OutlinedTextField(grams, { form = FoodFormLogic.typeGrams(form, it.take(8)); addError = null }, label = { Text("Quantité g", maxLines = 1) }, singleLine = true,
                     isError = name.isNotBlank() && (g == null || g <= 0),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
-                OutlinedTextField(kcal100, { kcal100 = it.take(8); autoFrom = null; addError = null }, label = { Text("kcal/100 g", maxLines = 1) }, singleLine = true,
+                // v2.9 : quand G/P/L sont renseignés, le champ affiche la valeur calculée (non modifiable : G/P/L priment)
+                OutlinedTextField(if (derivedKcal != null) fmt(derivedKcal) else kcal100, { kcal100 = it.take(8); autoFrom = null; addError = null },
+                    label = { Text(if (derivedKcal != null) "kcal/100 g (calculé)" else "kcal/100 g", maxLines = 1) }, singleLine = true,
+                    readOnly = derivedKcal != null,
                     isError = name.isNotBlank() && derivedKcal == null && (k == null || k < 0),
                     supportingText = if (derivedKcal != null) {
-                        { Text("≈ ${fmt(derivedKcal)} d'après G/P/L", color = Color(0xFF2E7D32)) }
+                        { Text("calculé G/P/L" + (if (kcalRes.typedIgnored) " (${fmt(kcalRes.typed!!)} tapé ignoré)" else ""), color = Color(0xFF2E7D32)) }
                     } else if (name.isNotBlank() && kcal100.isBlank()) {
                         { Text("kcal inconnues : saisis-les", color = Color(0xFFC62828)) }
                     } else null,
@@ -485,13 +490,13 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
             }
             ScalePanel(onUse = { w -> form = FoodFormLogic.scale(form, w) })
             autoFrom?.let { Text("Valeurs de la liste : $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
-            Text("Pour 100 g (facultatif) : G = glucides, P = protéines, L = lipides", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+            Text("Pour 100 g (facultatif) : G = glucides, P = protéines, L = lipides. Remplis-les et les kcal/100 g sont calculées (G×4 + P×4 + L×9).", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(carbs100, { carbs100 = it.take(6); autoFrom = null }, label = { Text("G (g)", maxLines = 1) }, singleLine = true,
+                OutlinedTextField(carbs100, { form = FoodFormLogic.typeMacro(form, 'G', it.take(6)) }, label = { Text("G (g)", maxLines = 1) }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
-                OutlinedTextField(prot100, { prot100 = it.take(6); autoFrom = null }, label = { Text("P (g)", maxLines = 1) }, singleLine = true,
+                OutlinedTextField(prot100, { form = FoodFormLogic.typeMacro(form, 'P', it.take(6)) }, label = { Text("P (g)", maxLines = 1) }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
-                OutlinedTextField(fat100, { fat100 = it.take(6); autoFrom = null }, label = { Text("L (g)", maxLines = 1) }, singleLine = true,
+                OutlinedTextField(fat100, { form = FoodFormLogic.typeMacro(form, 'L', it.take(6)) }, label = { Text("L (g)", maxLines = 1) }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
             }
             // Aperçu en direct
@@ -505,6 +510,8 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                             calc.fat?.let { add("L ${g1(it)} g") }
                         }
                         Text(parts.joinToString(" · "), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("${fmt(k!!)} kcal/100 g × ${fmt(g!!)} g" + (if (derivedKcal != null) " · kcal calculées depuis G/P/L (G×4 + P×4 + L×9)" else ""),
+                            style = MaterialTheme.typography.bodySmall)
                     } else {
                         Text("= — kcal", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }

@@ -39,7 +39,7 @@ val BUILTIN_FOODS: List<Food> by lazy {
 }
 
 /** Aliment par nom exact ou alias (accents et casse ignorés). */
-fun foodByName(name: String, foods: List<Food> = BUILTIN_FOODS): Food? {
+fun foodByName(name: String, foods: List<Food> = FoodCatalog.all()): Food? {
     val f = fold(name)
     return foods.firstOrNull { fold(it.name) == f } ?: foods.firstOrNull { it.aliases.any { a -> fold(a) == f } }
 }

@@ -20,6 +20,7 @@ data class Entry(
     val nutr: Map<String, Double> = emptyMap(), // nutriments pour 100 g (clés de NUTRIENTS)
     val fermented: Boolean = false,  // aliment fermenté / probiotique
     val prebiotic: Boolean = false,  // riche en prébiotiques (v1.1, absent = false)
+    val kcalUnknown: Boolean = false, // v2.8 : ajouté avec le poids seul (kcal inconnues, comptées 0)
 ) {
     /** Quantité du nutriment pour cette entrée, null si non renseigné. */
     fun nutrient(key: String): Double? = nutr[key]?.let { it * grams / 100.0 }
@@ -63,6 +64,7 @@ class Storage(context: Context) {
                     nutr = o.optJSONObject("n")?.let { n -> n.keys().asSequence().mapNotNull { k -> n.optNum(k)?.let { k to it } }.toMap() } ?: emptyMap(),
                     fermented = o.optBoolean("ferm", false),
                     prebiotic = o.optBoolean("preb", false),
+                    kcalUnknown = o.optBoolean("kcalUnk", false),
                 )
             }
         } catch (e: Exception) {
@@ -83,6 +85,7 @@ class Storage(context: Context) {
                 if (e.nutr.isNotEmpty()) put("n", JSONObject().apply { e.nutr.forEach { (k, v) -> put(k, v) } })
                 if (e.fermented) put("ferm", true)
                 if (e.prebiotic) put("preb", true)
+                if (e.kcalUnknown) put("kcalUnk", true)
             })
         }
         prefs.edit().putString("entries", arr.toString()).apply()

@@ -191,14 +191,14 @@ private fun rank(query: String, foods: List<Food>, prefixMode: Boolean): List<Sc
  * Aliment intégré correspondant au texte saisi (sans quantité en tête), pour remplir le formulaire automatiquement.
  * Tolère pluriels, accents, articles, mots de cuisson, une faute de frappe. Null si rien de sûr.
  */
-fun findFood(query: String, foods: List<Food> = BUILTIN_FOODS): Food? {
+fun findFood(query: String, foods: List<Food> = FoodCatalog.all()): Food? {
     val rest = parseQuantity(query).rest
     if (fold(rest).replace(" ", "").length < 2) return null
     return rank(rest, foods, prefixMode = false).firstOrNull()?.food
 }
 
 /** Suggestions pour la liste déroulante (le dernier mot peut être incomplet, en cours de frappe). */
-fun suggestFoods(query: String, foods: List<Food> = BUILTIN_FOODS, limit: Int = 40): List<Food> {
+fun suggestFoods(query: String, foods: List<Food> = FoodCatalog.all(), limit: Int = 40): List<Food> {
     val rest = parseQuantity(query).rest
     if (fold(rest).isEmpty()) return foods.take(limit)
     return rank(rest, foods, prefixMode = true).take(limit).map { it.food }
@@ -208,7 +208,7 @@ fun suggestFoods(query: String, foods: List<Food> = BUILTIN_FOODS, limit: Int = 
 fun foodLine(f: Food): String {
     fun m(v: Double?) = v?.let { if (it >= 10 || it % 1.0 == 0.0) it.roundToInt().toString() else String.format(Locale.FRENCH, "%.1f", it) }
     val macros = listOfNotNull(m(f.carbs)?.let { "G $it" }, m(f.proteins)?.let { "P $it" }, m(f.fat)?.let { "L $it" })
-    return "${f.kcalPer100g} kcal" + (if (macros.isEmpty()) "" else " · " + macros.joinToString(" · ")) + " (/100 g)" +
+    return (if (f.kcalPer100g < 0) "kcal inconnues" else "${f.kcalPer100g} kcal") + (if (macros.isEmpty()) "" else " · " + macros.joinToString(" · ")) + " (/100 g)" +
         (f.unitGrams?.let { u -> " · 1 ${f.unitLabel ?: "unité"} ≈ ${g0(u)} g" } ?: "")
 }
 

@@ -117,7 +117,8 @@ class V24Test {
 
     @Test fun entryNameIsChosenFoodOrTypedText() {
         assertEquals("Œuf entier (cru)", L.entryName(L.pick(typeChars(FoodForm(), "2 oeu"), egg)))
-        assertEquals("Œuf entier (cru)", L.entryName(typeChars(FoodForm(), "2 Œuf")))
+        // v2.8 : sans choix explicite, le nom tapé est gardé (sans la quantité en tête)
+        assertEquals("Œuf", L.entryName(typeChars(FoodForm(), "2 Œuf")))
         val free = L.type(FoodForm(kcal100 = "300"), TextFieldValue("  Plat de tatie  "), locked = false)
         assertEquals("Plat de tatie", L.entryName(free))
     }

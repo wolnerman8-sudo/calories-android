@@ -44,9 +44,11 @@ fun ScalePanel(onUse: (Double) -> Unit) {
     val ctx = LocalContext.current
     val mgr = remember { ScaleManager.get(ctx) }
     var debug by rememberSaveable { mutableStateOf(false) }
-    var auto by rememberSaveable { mutableStateOf(false) }
+    // v2.8 : remplissage automatique activé par défaut et mémorisé
+    val prefs = remember { ctx.getSharedPreferences("scale", Context.MODE_PRIVATE) }
+    var auto by remember { mutableStateOf(prefs.getBoolean("auto_fill", true)) }
+    val autoFill = remember { ScaleAutoFill() }
     var permMsg by remember { mutableStateOf<String?>(null) }
-    var lastAuto by remember { mutableStateOf<Double?>(null) }
 
     val enableBt = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (mgr.isBluetoothOn()) mgr.startScan() else permMsg = "Le Bluetooth doit être activé pour utiliser la balance."
@@ -73,8 +75,8 @@ fun ScalePanel(onUse: (Double) -> Unit) {
 
     val r = mgr.reading
     LaunchedEffect(r, auto) {
-        val g = r?.grams
-        if (auto && r != null && r.stable && g != null && g > 0 && (lastAuto == null || Math.abs(g - lastAuto!!) >= 0.5)) { lastAuto = g; onUse(g) }
+        if (!auto || r == null) return@LaunchedEffect
+        autoFill.onReading(r.grams, r.stable)?.let { onUse(it) }
     }
 
     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
@@ -117,9 +119,9 @@ fun ScalePanel(onUse: (Double) -> Unit) {
                         if (mgr.canTare) OutlinedButton(onClick = { mgr.tare() }, modifier = Modifier.weight(1f)) { Text("Tare (zéro)") }
                         OutlinedButton(onClick = { mgr.disconnect() }, modifier = Modifier.weight(1f)) { Text("Déconnecter") }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { auto = !auto }) {
-                        Checkbox(auto, { auto = it })
-                        Text("Remplir la quantité automatiquement quand le poids est stable", style = MaterialTheme.typography.bodySmall)
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { auto = !auto; prefs.edit().putBoolean("auto_fill", auto).apply() }) {
+                        Checkbox(auto, { auto = it; prefs.edit().putBoolean("auto_fill", it).apply() })
+                        Text("Remplir la quantité automatiquement quand le poids est stable (même pour un aliment hors liste)", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

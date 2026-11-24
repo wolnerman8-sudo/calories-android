@@ -126,6 +126,13 @@ Architecture de pilotes (`ScaleDrivers.kt`) : détection automatique d'après l'
 - Liste déroulante : kcal et macros pour 100 g sous chaque nom.
 - « Ajouter » : si les calories sont inconnues, message rouge juste sous le bouton.
 
+## Nouveautés v2.8
+
+- **Pesée d'un aliment hors liste** : un poids stable de la balance de cuisine remplit toujours « Quantité g », que le champ Aliment soit vide, libre ou un aliment de la liste ; taper un nom ou choisir une suggestion ne l'écrase jamais. Option « Remplir la quantité automatiquement » activée par défaut et mémorisée ; une nouvelle pesée (ou le même poids après avoir vidé le plateau) est réappliquée, une quantité tapée à la main est gardée tant que le poids ne change pas.
+- **Nom tapé conservé** : sans choix explicite dans la liste, l'entrée garde le nom tapé (sans la quantité en tête) avec le poids de la balance.
+- **kcal/100 g facultatives** : vides + G/P/L connus → estimées (4/4/9 kcal par g). Totalement inconnues → la raison rouge reste, et un bouton « Ajouter le poids seul (… g, kcal inconnues) » enregistre l'aliment avec 0 kcal, signalé « ? kcal » dans le journal et non envoyé à Santé Connect.
+- **Mes aliments** : chaque aliment hors liste ajouté est mémorisé (nom, kcal/100 g, G/P/L si connus), proposé en premier (⭐) dans la recherche, modifiable et supprimable dans Profil.
+
 ## Nouveautés v2.7
 
 - **Objectif protéines** dans « Aujourd'hui » : « Protéines : X g / Y g » avec une barre (verte à partir de 85 % de l'objectif, orange sinon). Objectif = poids du profil × 1,4 g/kg (minimum 50 g ; dernière pesée de la balance si le profil n'a pas de poids ; 96 g si aucun poids).

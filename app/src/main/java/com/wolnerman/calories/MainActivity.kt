@@ -57,6 +57,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val storage = Storage(applicationContext)
+        MyFoods.init(applicationContext)   // v2.8 : « Mes aliments »
         // v2.0 : range une clé API collée dans le mauvais champ (ex. clé Groq dans Gemini) — une seule fois
         runCatching { SecureSettings(applicationContext).migrateV2() }
         // v2.2 : (re)programme le rappel du soir (au cas où l'alarme aurait été perdue, ex. arrêt forcé)
@@ -364,11 +365,47 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
 
     val suggestions = remember(name) { suggestFoods(name) }
     val g = parseNum(grams)
-    val k = parseNum(kcal100)
+    // v2.8 : kcal vides mais G/P/L connus → kcal/100 g estimées (4/4/9)
+    val derivedKcal = if (kcal100.isBlank()) KcalLogic.fromMacros(parseNum(carbs100), parseNum(prot100), parseNum(fat100)) else null
+    val kcalEff = derivedKcal?.let { fmt(it) } ?: kcal100
+    val k = parseNum(kcalEff)
     val calc = calculate(g, k, parseNum(carbs100), parseNum(prot100), parseNum(fat100))
+    val weightOnly = KcalLogic.canAddWeightOnly(name, grams, kcalEff)
     // v2.1 : chaque refus a une raison affichée (addProblem couvre tous les cas où calc serait null)
-    val problem: String? = addProblem(name, grams, kcal100) ?: if (calc == null) "Valeurs invalides : vérifie quantité et kcal." else null
+    val problem: String? = addProblem(name, grams, kcalEff) ?: if (calc == null) "Valeurs invalides : vérifie quantité et kcal." else null
     val valid = problem == null && calc != null
+
+    /** Ajoute l'entrée du formulaire au journal ; [unknownKcal] = « poids seul » (kcal inconnues, comptées 0). */
+    fun addNow(unknownKcal: Boolean) {
+                    val photo = photoPath?.takeIf { p -> runCatching { File(p).exists() }.getOrDefault(false) }
+                    if (photoPath != null && photo == null) addNotice = "Photo introuvable : aliment ajouté sans photo."
+                    val entry = try {
+                        // v2.4 : nom = aliment de la liste dont viennent les valeurs, sinon le texte tapé
+                        val entryName = FoodFormLogic.entryName(form)
+                        Entry(System.currentTimeMillis(), today(), nowTime(), entryName, g!!, if (unknownKcal) 0.0 else k!!, photo,
+                            parseNum(carbs100)?.takeIf { it >= 0 }, parseNum(prot100)?.takeIf { it >= 0 }, parseNum(fat100)?.takeIf { it >= 0 },
+                            nutr = nutrTxt.mapNotNull { (key, v) -> parseNum(v)?.takeIf { it >= 0 }?.let { key to it } }.toMap(),
+                            fermented = fermented, prebiotic = prebiotic, kcalUnknown = unknownKcal)
+                    } catch (e: Exception) {
+                        android.util.Log.e("Calories", "Entrée invalide", e)
+                        addError = "Impossible d'ajouter : ${e.message ?: e.javaClass.simpleName}"; return
+                    }
+                    try { onAdd(entry) } catch (e: Exception) {
+                        android.util.Log.e("Calories", "Ajout au journal", e)
+                        addError = "Impossible d'enregistrer : ${e.message ?: e.javaClass.simpleName}"; return
+                    }
+                    // v2.8 : nom libre → mémorisé dans « Mes aliments » (nom, kcal/100 g, G/P/L si connus)
+                    val pickedBuiltin = form.picked && form.autoFrom?.let { n -> BUILTIN_FOODS.any { it.name == n } } == true
+                    if (MyFoodsLogic.shouldRemember(entry.name, pickedBuiltin, scanned != null)) runCatching {
+                        MyFoods.remember(CustomFood(entry.name, if (unknownKcal) null else k, parseNum(carbs100)?.takeIf { it >= 0 },
+                            parseNum(prot100)?.takeIf { it >= 0 }, parseNum(fat100)?.takeIf { it >= 0 }, System.currentTimeMillis()))
+                    }
+                    photoPath = null
+                    form = FoodForm(); nutrTxt.clear(); fermented = false; prebiotic = false; barcode = ""; scanned = null; scanMsg = null
+                    filledNote = null; addError = null; expanded = false
+                    addNotice = (addNotice?.let { "$it " } ?: "") + "✓ Ajouté : ${entry.name} (" +
+                        (if (entry.kcalUnknown) "${fmt(entry.grams)} g, kcal inconnues" else "${entry.kcal} kcal") + ")."
+    }
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -422,8 +459,8 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
                         suggestions.take(15).forEach { f ->
                             Column(Modifier.fillMaxWidth().clickable { pickFood(f) }.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                                Text(f.name)
-                                Text(foodLine(f), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                Text(if (MyFoodsLogic.isMine(f)) "⭐ ${f.name}" else f.name)
+                                Text((if (MyFoodsLogic.isMine(f)) "Mes aliments · " else "") + foodLine(f), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                             }
                         }
                     }
@@ -434,8 +471,10 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     isError = name.isNotBlank() && (g == null || g <= 0),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
                 OutlinedTextField(kcal100, { kcal100 = it.take(8); autoFrom = null; addError = null }, label = { Text("kcal/100 g", maxLines = 1) }, singleLine = true,
-                    isError = name.isNotBlank() && (k == null || k < 0),
-                    supportingText = if (name.isNotBlank() && kcal100.isBlank()) {
+                    isError = name.isNotBlank() && derivedKcal == null && (k == null || k < 0),
+                    supportingText = if (derivedKcal != null) {
+                        { Text("≈ ${fmt(derivedKcal)} d'après G/P/L", color = Color(0xFF2E7D32)) }
+                    } else if (name.isNotBlank() && kcal100.isBlank()) {
                         { Text("kcal inconnues : saisis-les", color = Color(0xFFC62828)) }
                     } else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
@@ -540,35 +579,19 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                         scope.launch { kotlinx.coroutines.delay(50); runCatching { addMsg.bringIntoView() } }
                         return@Button
                     }
-                    val photo = photoPath?.takeIf { p -> runCatching { File(p).exists() }.getOrDefault(false) }
-                    if (photoPath != null && photo == null) addNotice = "Photo introuvable : aliment ajouté sans photo."
-                    val entry = try {
-                        // v2.4 : nom = aliment de la liste dont viennent les valeurs, sinon le texte tapé
-                        val entryName = FoodFormLogic.entryName(form)
-                        Entry(System.currentTimeMillis(), today(), nowTime(), entryName, g!!, k!!, photo,
-                            parseNum(carbs100)?.takeIf { it >= 0 }, parseNum(prot100)?.takeIf { it >= 0 }, parseNum(fat100)?.takeIf { it >= 0 },
-                            nutr = nutrTxt.mapNotNull { (key, v) -> parseNum(v)?.takeIf { it >= 0 }?.let { key to it } }.toMap(),
-                            fermented = fermented, prebiotic = prebiotic)
-                    } catch (e: Exception) {
-                        android.util.Log.e("Calories", "Entrée invalide", e)
-                        addError = "Impossible d'ajouter : ${e.message ?: e.javaClass.simpleName}"; return@Button
-                    }
-                    try { onAdd(entry) } catch (e: Exception) {
-                        android.util.Log.e("Calories", "Ajout au journal", e)
-                        addError = "Impossible d'enregistrer : ${e.message ?: e.javaClass.simpleName}"; return@Button
-                    }
-                    photoPath = null
-                    form = FoodForm(); nutrTxt.clear(); fermented = false; prebiotic = false; barcode = ""; scanned = null; scanMsg = null
-                    filledNote = null; addError = null; expanded = false
-                    addNotice = (addNotice?.let { "$it " } ?: "") + "✓ Ajouté : ${entry.name} (${entry.kcal} kcal)."
+                    addNow(false)
                 }, modifier = Modifier.bringIntoViewRequester(addRow),
                     colors = if (valid) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColors(containerColor = Color(0xFF9E9E9E))) { Text("Ajouter") }
             }
             // v2.3 : raison en rouge directement sous « Ajouter » (calories inconnues affichées même avant l'appui)
-            val underAdd = addError ?: if (name.isNotBlank() && kcal100.isBlank()) kcalMissingMessage(name) else null
+            val underAdd = addError ?: if (name.isNotBlank() && kcalEff.isBlank()) kcalMissingMessage(name) else null
             underAdd?.let {
                 Text(it, color = Color(0xFFC62828), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.fillMaxWidth().bringIntoViewRequester(addMsg))
+            }
+            // v2.8 : aliment hors liste sans kcal : on peut quand même enregistrer le poids (kcal comptées 0, signalées)
+            if (weightOnly) OutlinedButton(onClick = { addNow(true) }, modifier = Modifier.fillMaxWidth()) {
+                Text("Ajouter le poids seul (${grams.trim()} g, kcal inconnues)")
             }
             addNotice?.let {
                 Text(it, color = Color(0xFF2E7D32), style = MaterialTheme.typography.bodySmall)
@@ -577,6 +600,7 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
         }
     }
 }
+
 
 @Composable
 fun EntryRow(e: Entry, onDelete: (Entry) -> Unit) {
@@ -587,11 +611,12 @@ fun EntryRow(e: Entry, onDelete: (Entry) -> Unit) {
                 Text(e.name + (if (e.fermented) " 🦠" else "") + (if (e.prebiotic) " 🌱" else ""), fontWeight = FontWeight.SemiBold)
                 val gTxt = if (e.grams % 1.0 == 0.0) e.grams.toInt().toString() else e.grams.toString()
                 val kTxt = if (e.kcalPer100g % 1.0 == 0.0) e.kcalPer100g.toInt().toString() else e.kcalPer100g.toString()
-                Text("${e.time}  ·  $gTxt g × $kTxt kcal/100 g", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                if (e.kcalUnknown) Text("${e.time}  ·  $gTxt g · kcal inconnues (comptées 0)", style = MaterialTheme.typography.bodySmall, color = Color(0xFFB26A00))
+                else Text("${e.time}  ·  $gTxt g × $kTxt kcal/100 g", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 if (e.hasMacros) Text("G ${g1(e.carbs)} g · P ${g1(e.proteins)} g · L ${g1(e.fat)} g",
                     style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
-            Text("${e.kcal} kcal", fontWeight = FontWeight.Bold)
+            Text(if (e.kcalUnknown) "? kcal" else "${e.kcal} kcal", fontWeight = FontWeight.Bold)
             IconButton(onClick = { onDelete(e) }) { Icon(Icons.Filled.Delete, contentDescription = "Supprimer") }
         }
     }
@@ -719,6 +744,7 @@ fun ProfileScreen(storage: Storage, goal: Int, entries: List<Entry>, onUseGoal: 
             CompositionGuideCard(age = profile.age, fat = lastComp?.fatPct, muscle = lastComp?.musclePct,
                 measuredAt = lastComp?.timeMs)
         }
+        item { MyFoodsCard() }
         item { RecognitionSettingsCard() }
         item { AppVersionText(Modifier.padding(top = 4.dp)) }
         item {

@@ -143,8 +143,10 @@ object HealthSync {
         val c = client(ctx)
         val write = HealthPermission.getWritePermission(NutritionRecord::class)
         if (write !in c.permissionController.getGrantedPermissions()) error("autorisation d'écriture refusée")
-        entries.chunked(100).forEach { batch -> c.insertRecords(batch.map { HealthMapping.toRecord(it) }) }
-        entries.size
+        // v2.8 : une entrée « poids seul » (kcal inconnues) n'est pas envoyée (elle fausserait l'énergie du jour)
+        val known = entries.filter { !it.kcalUnknown }
+        known.chunked(100).forEach { batch -> c.insertRecords(batch.map { HealthMapping.toRecord(it) }) }
+        known.size
     }
 
     /** Supprime les enregistrements correspondant à ces entrées (par identifiant client). */

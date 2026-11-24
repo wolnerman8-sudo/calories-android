@@ -22,7 +22,8 @@ data class FoodForm(
     val autoFrom: String? = null,      // aliment de la liste dont viennent kcal/macros (null = saisie libre / scan)
     val picked: Boolean = false,       // choisi explicitement dans la liste
     val pendingQty: QtyParse? = null,  // quantité tapée avant un choix dans la liste (« 2 œufs » → Œuf dur)
-    val macrosByUser: Boolean = false, // v2.9 : G/P/L tapés par l'utilisateur → kcal calculées prioritaires
+    val fiber100: String = "",         // v2.10 : fibres g/100 g (facultatif) ; G = glucides totaux, fibres comprises
+    val alcohol100: Double? = null,    // v2.10 : alcool de l'aliment de la liste (7 kcal/g), invisible
 ) {
     val text: String get() = name.text
 }
@@ -31,12 +32,16 @@ object FoodFormLogic {
     private fun num(d: Double?): String = d?.let { fmt(it) } ?: ""
 
     /** Copie kcal et macros d'un aliment de la liste (ne touche ni au nom ni à la quantité). */
-    fun fill(s: FoodForm, f: Food) = s.copy(kcal100 = if (f.kcalPer100g >= 0) f.kcalPer100g.toString() else "", carbs100 = num(f.carbs),
-        prot100 = num(f.proteins), fat100 = num(f.fat), autoFrom = f.name, macrosByUser = false)
+    fun fill(s: FoodForm, f: Food): FoodForm {
+        val fib = f.nutrients["fiber"]
+        return s.copy(kcal100 = if (f.kcalPer100g >= 0) f.kcalPer100g.toString() else "",
+            carbs100 = num(if (MyFoodsLogic.isMine(f)) f.carbs else KcalLogic.totalCarbs(f.carbs, fib)),
+            prot100 = num(f.proteins), fat100 = num(f.fat), fiber100 = num(fib), alcohol100 = f.alcohol?.takeIf { it > 0 }, autoFrom = f.name)
+    }
 
     /** Retire les valeurs venues de la liste (pas celles tapées à la main). */
     fun unfill(s: FoodForm) = if (s.autoFrom == null) s
-        else s.copy(kcal100 = "", carbs100 = "", prot100 = "", fat100 = "", autoFrom = null, picked = false, macrosByUser = false)
+        else s.copy(kcal100 = "", carbs100 = "", prot100 = "", fat100 = "", fiber100 = "", alcohol100 = null, autoFrom = null, picked = false)
 
     /**
      * Frappe dans « Aliment » : le TextFieldValue du clavier est gardé tel quel (jamais réécrit).
@@ -63,12 +68,12 @@ object FoodFormLogic {
     fun setName(s: FoodForm, text: String) = s.copy(name = TextFieldValue(text, TextRange(text.length)), pendingQty = null)
 
     /** Bouton ✕ : vide le nom et les valeurs venues de la liste ; garde la quantité (tapée ou balance). */
-    fun clear(s: FoodForm) = unfill(s).copy(name = TextFieldValue(""), picked = false, pendingQty = null)
+    fun clear(s: FoodForm) = unfill(s).copy(name = TextFieldValue(""), picked = false, pendingQty = null, alcohol100 = null)
 
-    /** v2.9 : saisie dans G, P ou L ('G'/'P'/'L') : les valeurs deviennent « tapées », les kcal seront calculées. */
+    /** Saisie dans G, P, L ou Fibres ('G'/'P'/'L'/'F') : les valeurs deviennent « tapées » ; kcal recalculées. */
     fun typeMacro(s: FoodForm, which: Char, txt: String): FoodForm {
-        val n = when (which) { 'G' -> s.copy(carbs100 = txt); 'P' -> s.copy(prot100 = txt); else -> s.copy(fat100 = txt) }
-        return n.copy(autoFrom = null, picked = false, macrosByUser = true)
+        val n = when (which) { 'G' -> s.copy(carbs100 = txt); 'P' -> s.copy(prot100 = txt); 'F' -> s.copy(fiber100 = txt); else -> s.copy(fat100 = txt) }
+        return n.copy(autoFrom = null, picked = false)
     }
 
     fun typeGrams(s: FoodForm, txt: String) = s.copy(grams = txt, gramsBy = GramsSource.USER)
@@ -129,30 +134,53 @@ class ScaleAutoFill {
 }
 
 object KcalLogic {
-    /** kcal/100 g estimées depuis G/P/L (4 / 4 / 9 kcal par g) si au moins une valeur est connue, sinon null. */
-    fun fromMacros(carbs: Double?, proteins: Double?, fat: Double?): Double? {
-        if (carbs == null && proteins == null && fat == null) return null
-        val k = (carbs ?: 0.0) * 4 + (proteins ?: 0.0) * 4 + (fat ?: 0.0) * 9
-        return Math.round(k * 10.0) / 10.0
-    }
+    private fun r1(x: Double) = Math.round(x * 10.0) / 10.0
 
-    /** Résultat du choix des kcal/100 g utilisées. */
-    data class Kcal(val kcal100: Double?, val computed: Boolean, val typed: Double?, val typedIgnored: Boolean)
+    /** Glucides utilisés : G si fibres inconnues, sinon G − fibres (minimum 0). */
+    fun digestibleCarbs(carbs: Double?, fiber: Double?): Double? = carbs?.let { if (fiber == null) it else r1(maxOf(0.0, it - fiber)) }
+
+    /** Ciqual / Open Food Facts (UE) donnent des glucides SANS les fibres : G affiché = glucides + fibres (glucides totaux). */
+    fun totalCarbs(available: Double?, fiber: Double?): Double? = available?.let { if (fiber == null) it else r1(it + fiber) }
 
     /**
-     * v2.9 : kcal/100 g utilisées. Dès que G, P ou L est renseigné, kcal = G×4 + P×4 + L×9 (champs vides = 0) et
-     * cette valeur est PRIORITAIRE sur les kcal tapées. Exception : valeurs venant telles quelles d'un aliment de la
-     * liste ou d'un scan ([fromSource]) tant que l'utilisateur n'a pas modifié G/P/L ([macrosByUser]) : on garde
-     * alors les kcal de la source (qui tiennent compte des fibres, de l'alcool…).
+     * kcal/100 g depuis G/P/L si au moins une valeur est connue, sinon null :
+     * (G − fibres)×4 + P×4 + L×9 (+ alcool×7 pour les boissons alcoolisées de la liste).
      */
-    fun effective(kcalTxt: String, carbsTxt: String, protTxt: String, fatTxt: String, macrosByUser: Boolean, fromSource: Boolean): Kcal {
-        val typed = parseNum(kcalTxt).takeIf { kcalTxt.isNotBlank() }
-        val computed = fromMacros(parseNum(carbsTxt).takeIf { carbsTxt.isNotBlank() }, parseNum(protTxt).takeIf { protTxt.isNotBlank() },
-            parseNum(fatTxt).takeIf { fatTxt.isNotBlank() })
-        val useComputed = computed != null && (macrosByUser || !fromSource || typed == null)
-        return if (useComputed) Kcal(computed, true, typed, typed != null && kotlin.math.abs(typed - computed!!) >= 0.5)
-        else Kcal(typed, false, typed, false)
+    fun fromMacros(carbs: Double?, proteins: Double?, fat: Double?, fiber: Double? = null, alcohol: Double? = null): Double? {
+        if (carbs == null && proteins == null && fat == null) return null
+        val k = (digestibleCarbs(carbs, fiber) ?: 0.0) * 4 + (proteins ?: 0.0) * 4 + (fat ?: 0.0) * 9 + (alcohol ?: 0.0) * 7
+        return r1(k)
     }
+
+    /** Résultat du choix des kcal/100 g utilisées ; [carbsUsed] = glucides comptés (G − fibres). */
+    data class Kcal(val kcal100: Double?, val computed: Boolean, val typed: Double?, val typedIgnored: Boolean,
+                    val carbsUsed: Double?, val fiberUsed: Boolean, val alcohol: Double?)
+
+    private fun opt(t: String) = parseNum(t).takeIf { t.isNotBlank() }
+
+    /**
+     * v2.10 : pour TOUS les aliments (saisie libre, liste, scan, Mes aliments) : dès que G, P ou L est renseigné,
+     * kcal/100 g = (G ou G − fibres)×4 + P×4 + L×9 (champs vides = 0), prioritaire sur les kcal tapées ou de la fiche.
+     * G, P et L vides → pas de calcul : les kcal tapées sont utilisées.
+     */
+    fun effective(kcalTxt: String, carbsTxt: String, protTxt: String, fatTxt: String, fiberTxt: String = "", alcohol: Double? = null): Kcal {
+        val typed = opt(kcalTxt)
+        val c = opt(carbsTxt); val fib = opt(fiberTxt)
+        val computed = fromMacros(c, opt(protTxt), opt(fatTxt), fib, alcohol)
+        return if (computed != null) Kcal(computed, true, typed, typed != null && kotlin.math.abs(typed - computed) >= 0.5,
+            digestibleCarbs(c, fib), fib != null && c != null, alcohol?.takeIf { it > 0 })
+        else Kcal(typed, false, typed, false, c, false, null)
+    }
+
+    /** kcal/100 g qui seront utilisées pour cet aliment (calcul G/P/L, sinon kcal de la fiche ; null = inconnues). */
+    fun forFood(f: Food): Double? {
+        val fib = f.nutrients["fiber"]
+        val carbs = if (MyFoodsLogic.isMine(f)) f.carbs else KcalLogic.totalCarbs(f.carbs, fib)
+        return fromMacros(carbs, f.proteins, f.fat, fib, f.alcohol?.takeIf { it > 0 }) ?: f.kcalPer100g.takeIf { it >= 0 }?.toDouble()
+    }
+
+    /** Formule affichée sous le total. */
+    fun formula(r: Kcal): String = (if (r.fiberUsed) "(G − fibres)×4" else "G×4") + " + P×4 + L×9" + (if (r.alcohol != null) " + alcool ${fmt(r.alcohol)} g×7" else "")
 
     /** Ajout « poids seul » possible : nom et quantité valides, seules les kcal manquent. */
     fun canAddWeightOnly(name: String, grams: String, kcal100: String): Boolean {

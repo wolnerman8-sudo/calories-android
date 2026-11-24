@@ -255,6 +255,7 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
     var carbs100 by formField(formState, { it.carbs100 }) { s, v -> s.copy(carbs100 = v) }
     var prot100 by formField(formState, { it.prot100 }) { s, v -> s.copy(prot100 = v) }
     var fat100 by formField(formState, { it.fat100 }) { s, v -> s.copy(fat100 = v) }
+    val fiber100: String = form.fiber100
     val nutrTxt = remember { mutableStateMapOf<String, String>() }
     var showNutr by remember { mutableStateOf(false) }
     var fermented by remember { mutableStateOf(false) }
@@ -310,11 +311,13 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     scanned = r.product
                     form = FoodFormLogic.setName(form, r.product.name)
                     r.product.kcalPer100g?.let { kcal100 = fmt(it) }
-                    carbs100 = r.product.carbs?.let { fmt(it) } ?: ""
+                    // v2.10 : glucides UE (sans fibres) + fibres = G total ; G − fibres redonne les glucides de l'étiquette
+                    val fib = r.product.nutr["fiber"]
+                    carbs100 = KcalLogic.totalCarbs(r.product.carbs, fib)?.let { fmt(it) } ?: ""
                     prot100 = r.product.proteins?.let { fmt(it) } ?: ""
                     fat100 = r.product.fat?.let { fmt(it) } ?: ""
                     fillNutr(r.product.nutr); fermented = r.product.fermented; prebiotic = r.product.prebiotic
-                    autoFrom = null; form = form.copy(macrosByUser = false)
+                    autoFrom = null; form = form.copy(fiber100 = fib?.let { fmt(it) } ?: "", alcohol100 = null)
                     if (r.product.kcalPer100g == null) scanMsg = "Calories non renseignées pour ce produit : saisis les kcal/100 g (voir l'étiquette)."
                 }
                 is LookupResult.Error -> scanMsg = r.message
@@ -367,11 +370,14 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
     val g = parseNum(grams)
     // v2.8 : kcal vides mais G/P/L connus → kcal/100 g estimées (4/4/9)
     // v2.9 : dès que G/P/L sont renseignés, kcal/100 g = G×4 + P×4 + L×9, prioritaires sur la valeur tapée
-    val kcalRes = KcalLogic.effective(kcal100, carbs100, prot100, fat100, form.macrosByUser, fromSource = autoFrom != null || scanned != null)
+    // v2.10 : pour TOUS les aliments (liste, scan compris) ; fibres facultatives : glucides utilisés = G − fibres
+    val kcalRes = KcalLogic.effective(kcal100, carbs100, prot100, fat100, fiber100, form.alcohol100)
+    val fromSource = autoFrom != null || scanned != null
     val derivedKcal = kcalRes.kcal100?.takeIf { kcalRes.computed }
     val kcalEff = kcalRes.kcal100?.let { if (kcalRes.computed) fmt(it) else kcal100 } ?: kcal100
     val k = parseNum(kcalEff)
-    val calc = calculate(g, k, parseNum(carbs100), parseNum(prot100), parseNum(fat100))
+    val carbsUsed = kcalRes.carbsUsed?.takeIf { it >= 0 }
+    val calc = calculate(g, k, carbsUsed, parseNum(prot100), parseNum(fat100))
     val weightOnly = KcalLogic.canAddWeightOnly(name, grams, kcalEff)
     // v2.1 : chaque refus a une raison affichée (addProblem couvre tous les cas où calc serait null)
     val problem: String? = addProblem(name, grams, kcalEff) ?: if (calc == null) "Valeurs invalides : vérifie quantité et kcal." else null
@@ -385,8 +391,10 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                         // v2.4 : nom = aliment de la liste dont viennent les valeurs, sinon le texte tapé
                         val entryName = FoodFormLogic.entryName(form)
                         Entry(System.currentTimeMillis(), today(), nowTime(), entryName, g!!, if (unknownKcal) 0.0 else k!!, photo,
-                            parseNum(carbs100)?.takeIf { it >= 0 }, parseNum(prot100)?.takeIf { it >= 0 }, parseNum(fat100)?.takeIf { it >= 0 },
-                            nutr = nutrTxt.mapNotNull { (key, v) -> parseNum(v)?.takeIf { it >= 0 }?.let { key to it } }.toMap(),
+                            carbsUsed, parseNum(prot100)?.takeIf { it >= 0 }, parseNum(fat100)?.takeIf { it >= 0 },
+                            // v2.10 : les fibres du champ « Fibres (g) » vont dans les nutriments
+                            nutr = (nutrTxt.filterKeys { it != "fiber" } + ("fiber" to fiber100))
+                                .mapNotNull { (key, v) -> parseNum(v)?.takeIf { it >= 0 && v.isNotBlank() }?.let { key to it } }.toMap(),
                             fermented = fermented, prebiotic = prebiotic, kcalUnknown = unknownKcal)
                     } catch (e: Exception) {
                         android.util.Log.e("Calories", "Entrée invalide", e)
@@ -400,7 +408,8 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     val pickedBuiltin = form.picked && form.autoFrom?.let { n -> BUILTIN_FOODS.any { it.name == n } } == true
                     if (MyFoodsLogic.shouldRemember(entry.name, pickedBuiltin, scanned != null)) runCatching {
                         MyFoods.remember(CustomFood(entry.name, if (unknownKcal) null else k, parseNum(carbs100)?.takeIf { it >= 0 },
-                            parseNum(prot100)?.takeIf { it >= 0 }, parseNum(fat100)?.takeIf { it >= 0 }, System.currentTimeMillis()))
+                            parseNum(prot100)?.takeIf { it >= 0 }, parseNum(fat100)?.takeIf { it >= 0 }, System.currentTimeMillis(),
+                            parseNum(fiber100)?.takeIf { it >= 0 && fiber100.isNotBlank() }))
                     }
                     photoPath = null
                     form = FoodForm(); nutrTxt.clear(); fermented = false; prebiotic = false; barcode = ""; scanned = null; scanMsg = null
@@ -478,7 +487,9 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                     readOnly = derivedKcal != null,
                     isError = name.isNotBlank() && derivedKcal == null && (k == null || k < 0),
                     supportingText = if (derivedKcal != null) {
-                        { Text("calculé G/P/L" + (if (kcalRes.typedIgnored) " (${fmt(kcalRes.typed!!)} tapé ignoré)" else ""), color = Color(0xFF2E7D32)) }
+                        { Text("calculé G/P/L" + (if (kcalRes.fiberUsed) " − fibres" else "") +
+                            (if (kcalRes.typedIgnored) (if (fromSource) " (fiche : ${fmt(kcalRes.typed!!)})" else " (${fmt(kcalRes.typed!!)} tapé ignoré)") else ""),
+                            color = Color(0xFF2E7D32)) }
                     } else if (name.isNotBlank() && kcal100.isBlank()) {
                         { Text("kcal inconnues : saisis-les", color = Color(0xFFC62828)) }
                     } else null,
@@ -490,14 +501,23 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
             }
             ScalePanel(onUse = { w -> form = FoodFormLogic.scale(form, w) })
             autoFrom?.let { Text("Valeurs de la liste : $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
-            Text("Pour 100 g (facultatif) : G = glucides, P = protéines, L = lipides. Remplis-les et les kcal/100 g sont calculées (G×4 + P×4 + L×9).", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+            Text("Pour 100 g (facultatif) : G = glucides, P = protéines, L = lipides, Fibres. Remplis-les et les kcal/100 g sont calculées : G×4 + P×4 + L×9 (G − fibres si les fibres sont saisies).", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+            // v2.10 : 2 × 2 (G, P / L, Fibres) pour tenir sur la largeur d'un téléphone Samsung
+            val dec = KeyboardOptions(keyboardType = KeyboardType.Decimal)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(carbs100, { form = FoodFormLogic.typeMacro(form, 'G', it.take(6)) }, label = { Text("G (g)", maxLines = 1) }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
+                    keyboardOptions = dec, modifier = Modifier.weight(1f))
                 OutlinedTextField(prot100, { form = FoodFormLogic.typeMacro(form, 'P', it.take(6)) }, label = { Text("P (g)", maxLines = 1) }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
+                    keyboardOptions = dec, modifier = Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(fat100, { form = FoodFormLogic.typeMacro(form, 'L', it.take(6)) }, label = { Text("L (g)", maxLines = 1) }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
+                    keyboardOptions = dec, modifier = Modifier.weight(1f))
+                OutlinedTextField(fiber100, { form = FoodFormLogic.typeMacro(form, 'F', it.take(6)) }, label = { Text("Fibres (g)", maxLines = 1) }, singleLine = true,
+                    keyboardOptions = dec, modifier = Modifier.weight(1f))
+            }
+            if (kcalRes.fiberUsed) kcalRes.carbsUsed?.let {
+                Text("Glucides comptés : G − fibres = ${fmt(it)} g / 100 g", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
             // Aperçu en direct
             Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
@@ -510,7 +530,7 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
                             calc.fat?.let { add("L ${g1(it)} g") }
                         }
                         Text(parts.joinToString(" · "), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("${fmt(k!!)} kcal/100 g × ${fmt(g!!)} g" + (if (derivedKcal != null) " · kcal calculées depuis G/P/L (G×4 + P×4 + L×9)" else ""),
+                        Text("${fmt(k!!)} kcal/100 g × ${fmt(g!!)} g" + (if (derivedKcal != null) " · kcal calculées : ${KcalLogic.formula(kcalRes)}" else ""),
                             style = MaterialTheme.typography.bodySmall)
                     } else {
                         Text("= — kcal", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -529,7 +549,7 @@ fun AddEntryCard(onAdd: (Entry) -> Unit) {
             }
             if (showNutr) {
                 Text("Nutriments pour 100 g (facultatif)", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
-                NUTRIENTS.chunked(2).forEach { pair ->
+                NUTRIENTS.filter { it.key != "fiber" }.chunked(2).forEach { pair ->   // fibres : champ « Fibres (g) » au-dessus
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         pair.forEach { n ->
                             OutlinedTextField(nutrTxt[n.key] ?: "", { nutrTxt[n.key] = it.take(8) },

@@ -84,7 +84,7 @@ class FoodDbTest {
     }
     @Test fun ligneDeSuggestion() {
         val f = foodByName("Œuf dur")!!
-        assertEquals("134 kcal · G 0,5 · P 14 · L 8,6 (/100 g) · 1 œuf ≈ 50 g", foodLine(f))
+        assertEquals("133 kcal · G 0,5 · P 14 · L 8,6 (/100 g) · 1 œuf ≈ 50 g", foodLine(f))   // v2.10 : kcal calculées G×4 + P×4 + L×9 (Ciqual : 134)
     }
     @Test fun messageSousAjouter() {
         assertEquals("Calories inconnues pour « X » : choisis un aliment de la liste ou saisis les kcal pour 100 g.", addProblem("X", "100", ""))

@@ -60,6 +60,7 @@ private fun MyFoodDialog(c: CustomFood, onDismiss: () -> Unit, onSave: (CustomFo
     var carbs by remember { mutableStateOf(t(c.carbs)) }
     var prot by remember { mutableStateOf(t(c.proteins)) }
     var fat by remember { mutableStateOf(t(c.fat)) }
+    var fiber by remember { mutableStateOf(t(c.fiber)) }
     val dec = KeyboardOptions(keyboardType = KeyboardType.Decimal)
     AlertDialog(onDismissRequest = onDismiss,
         title = { Text(if (c.name.isBlank()) "Nouvel aliment" else "Modifier l'aliment") },
@@ -70,17 +71,21 @@ private fun MyFoodDialog(c: CustomFood, onDismiss: () -> Unit, onSave: (CustomFo
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     OutlinedTextField(carbs, { carbs = it.take(6) }, label = { Text("G") }, singleLine = true, keyboardOptions = dec, modifier = Modifier.weight(1f))
                     OutlinedTextField(prot, { prot = it.take(6) }, label = { Text("P") }, singleLine = true, keyboardOptions = dec, modifier = Modifier.weight(1f))
-                    OutlinedTextField(fat, { fat = it.take(6) }, label = { Text("L") }, singleLine = true, keyboardOptions = dec, modifier = Modifier.weight(1f))
                 }
-                val derived = KcalLogic.effective(kcal, carbs, prot, fat, macrosByUser = true, fromSource = false).takeIf { it.computed }?.kcal100
-                derived?.let { Text("= ${fmt(it)} kcal/100 g calculées depuis G/P/L (prioritaires)", style = MaterialTheme.typography.bodySmall, color = Color(0xFF2E7D32)) }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedTextField(fat, { fat = it.take(6) }, label = { Text("L") }, singleLine = true, keyboardOptions = dec, modifier = Modifier.weight(1f))
+                    OutlinedTextField(fiber, { fiber = it.take(6) }, label = { Text("Fibres") }, singleLine = true, keyboardOptions = dec, modifier = Modifier.weight(1f))
+                }
+                val res = KcalLogic.effective(kcal, carbs, prot, fat, fiber)
+                res.kcal100?.takeIf { res.computed }?.let { Text("= ${fmt(it)} kcal/100 g calculées : ${KcalLogic.formula(res)} (prioritaires)", style = MaterialTheme.typography.bodySmall, color = Color(0xFF2E7D32)) }
             }
         },
         confirmButton = {
             TextButton(enabled = name.isNotBlank(), onClick = {
                 val c2 = parseNum(carbs)?.takeIf { it >= 0 }; val p2 = parseNum(prot)?.takeIf { it >= 0 }; val f2 = parseNum(fat)?.takeIf { it >= 0 }
-                val k = KcalLogic.fromMacros(c2, p2, f2) ?: parseNum(kcal)?.takeIf { it in 0.0..1000.0 }
-                onSave(CustomFood(name.trim(), k, c2, p2, f2, System.currentTimeMillis()))
+                val fi2 = parseNum(fiber)?.takeIf { it >= 0 && fiber.isNotBlank() }
+                val k = KcalLogic.fromMacros(c2, p2, f2, fi2) ?: parseNum(kcal)?.takeIf { it in 0.0..1000.0 }
+                onSave(CustomFood(name.trim(), k, c2, p2, f2, System.currentTimeMillis(), fi2))
             }) { Text("Enregistrer") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } })

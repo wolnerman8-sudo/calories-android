@@ -13,6 +13,7 @@ COL = {
  'fiber': 'Fibres alimentaires (g/100 g)', 'sugars': 'Sucres (g/100 g)', 'salt': 'Sel chlorure de sodium (g/100 g)',
  'satfat': 'AG saturés (g/100 g)', 'calcium': 'Calcium (mg/100 g)', 'iron': 'Fer (mg/100 g)',
  'vitc': 'Vitamine C (mg/100 g)', 'vitd': 'Vitamine D (µg/100 g)',
+ 'alcohol': 'Alcool (éthanol) (g/100 g)',
 }
 NUT = ['fiber', 'sugars', 'salt', 'satfat', 'calcium', 'iron', 'vitc', 'vitd']
 def val(x, k):
@@ -72,7 +73,7 @@ out = ['package com.wolnerman.calories', '',
  '// Valeurs pour 100 g : Anses. 2025. Table de composition nutritionnelle des aliments Ciqual 2025.',
  '// https://doi.org/10.57745/RDMHWY (Licence Ouverte Etalab 2.0). Recettes = calcul à partir des ingrédients Ciqual.',
  '// Colonnes : nom|catégorie|kcal|glucides|protéines|lipides|fibres|sucres|sel|AG saturés|calcium mg|fer mg|vit C mg|vit D µg|',
- '//            poids unitaire g|unité|alias (;)|drapeaux F/P|source. Champ vide = inconnu.', '',
+ '//            poids unitaire g|unité|alias (;)|drapeaux F/P|source|alcool g (v2.10). Champ vide = inconnu / 0.', '',
  'internal object FoodData {']
 for i, c in enumerate(cats):
     out.append(f'    // {c}')
@@ -80,7 +81,7 @@ for i, c in enumerate(cats):
     for (cc, name, r, unit, ul, al, fl, src) in rows:
         if cc != c: continue
         vals = [str(round(r['kcal'])), n(r['G'], 1), n(r['P'], 1), n(r['L'], 1)] + [n(r[k], ndec(k)) for k in NUT]
-        line = '|'.join([name, c] + vals + [unit, ul, al, fl, src])
+        line = '|'.join([name, c] + vals + [unit, ul, al, fl, src, n(r['alcohol'], 1) if (r['alcohol'] or 0) > 0 else ''])
         assert '"""' not in line and '$' not in line
         out.append(line)
     out.append('"""')

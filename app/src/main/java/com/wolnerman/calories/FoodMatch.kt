@@ -208,7 +208,8 @@ fun suggestFoods(query: String, foods: List<Food> = FoodCatalog.all(), limit: In
 fun foodLine(f: Food): String {
     fun m(v: Double?) = v?.let { if (it >= 10 || it % 1.0 == 0.0) it.roundToInt().toString() else String.format(Locale.FRENCH, "%.1f", it) }
     val macros = listOfNotNull(m(f.carbs)?.let { "G $it" }, m(f.proteins)?.let { "P $it" }, m(f.fat)?.let { "L $it" })
-    return (if (f.kcalPer100g < 0) "kcal inconnues" else "${f.kcalPer100g} kcal") + (if (macros.isEmpty()) "" else " · " + macros.joinToString(" · ")) + " (/100 g)" +
+    val kc = KcalLogic.forFood(f)   // v2.10 : kcal calculées depuis G/P/L (celles qui seront utilisées)
+    return (if (kc == null) "kcal inconnues" else "${kc.roundToInt()} kcal") + (if (macros.isEmpty()) "" else " · " + macros.joinToString(" · ")) + " (/100 g)" +
         (f.unitGrams?.let { u -> " · 1 ${f.unitLabel ?: "unité"} ≈ ${g0(u)} g" } ?: "")
 }
 

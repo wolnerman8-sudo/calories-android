@@ -14,19 +14,20 @@ data class Food(
     val aliases: List<String> = emptyList(),
     val category: String = "",
     val source: String = "",
+    val alcohol: Double? = null,   // v2.10 : alcool g/100 g (Ciqual), compté 7 kcal/g dans le calcul G/P/L
 )
 
 /** Lecture d'une ligne de FoodData (voir l'en-tête de FoodData.kt). */
 internal fun parseFoodRow(line: String): Food {
     val c = line.split('|')
-    require(c.size == 19) { "Ligne d'aliment invalide (${c.size} colonnes) : $line" }
+    require(c.size == 20) { "Ligne d'aliment invalide (${c.size} colonnes) : $line" }
     fun d(i: Int): Double? = c[i].takeIf { it.isNotBlank() }?.toDouble()
     val nutr = NUTRIENTS.mapIndexedNotNull { i, n -> d(6 + i)?.let { n.key to it } }.toMap()
     return Food(
         name = c[0], category = c[1], kcalPer100g = c[2].toInt(), carbs = d(3), proteins = d(4), fat = d(5),
         nutrients = nutr, unitGrams = d(14), unitLabel = c[15].ifBlank { null },
         aliases = c[16].split(';').map { it.trim() }.filter { it.isNotEmpty() },
-        fermented = 'F' in c[17], prebiotic = 'P' in c[17], source = c[18],
+        fermented = 'F' in c[17], prebiotic = 'P' in c[17], source = c[18], alcohol = d(19),
     )
 }
 

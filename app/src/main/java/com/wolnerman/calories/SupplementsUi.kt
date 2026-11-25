@@ -2,6 +2,7 @@ package com.wolnerman.calories
 
 import android.Manifest
 import android.app.TimePickerDialog
+import android.content.Context
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 private val SUPP_GREEN = Color(0xFF2E7D32)
 
@@ -43,18 +45,68 @@ fun supplementSubtitle(s: Supplement): String {
 }
 
 /**
+ * Scan depuis la carte : si le code est déjà connu, on coche « Pris » aujourd'hui
+ * (ou on ouvre la fiche s'il est déjà pris). Sinon on ouvre le dialogue prérempli (ou vide + message).
+ */
+private suspend fun handleCardScan(
+    ctx: Context,
+    raw: String,
+    todayIso: String,
+): Pair<Supplement?, String?> {
+    val known = SupplementScanLogic.findByBarcode(Supplements.items, raw)
+    if (known != null) {
+        return if (!Supplements.isTaken(known.id, todayIso)) {
+            Supplements.setTaken(ctx, todayIso, known.id, true)
+            null to "« ${known.name} » coché comme pris aujourd'hui."
+        } else {
+            known to "Déjà pris aujourd'hui. Tu peux modifier le complément."
+        }
+    }
+    val draft = SupplementScanLogic.lookup(raw)
+    val prefill = SupplementScanLogic.toSupplement(draft)
+    val msg = if (draft.recognized) {
+        listOfNotNull(
+            draft.source?.let { "Fiche trouvée sur $it. Vérifie et enregistre." },
+        ).joinToString(" ").ifBlank { null }
+    } else draft.message ?: SupplementScanLogic.UNRECOGNIZED
+    return prefill to msg
+}
+
+/**
  * Section « Compléments » dans Aujourd'hui (séparée des aliments).
  * Permet de cocher les prises du jour, d'ajouter un complément et (via Gérer) modifier/supprimer.
  */
 @Composable
 fun SupplementsTodayCard(todayIso: String) {
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     val items = Supplements.items
     val logs = Supplements.logs
     var managing by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Supplement?>(null) }
+    var scanMessage by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<Supplement?>(null) }
     var info by remember { mutableStateOf<String?>(null) }
+    var scanning by remember { mutableStateOf(false) }
+
+    fun launchScan() {
+        startSupplementBarcodeScan(ctx, onCode = { code ->
+            scanning = true
+            info = "Recherche du produit…"
+            scope.launch {
+                val (supp, msg) = handleCardScan(ctx, code, todayIso)
+                scanning = false
+                if (supp != null) {
+                    editing = supp
+                    scanMessage = msg
+                    info = null
+                } else {
+                    info = msg
+                    scanMessage = null
+                }
+            }
+        }, onError = { err -> info = err })
+    }
 
     val takenCount = items.count { SupplementLogic.isTaken(logs, todayIso, it.id) }
     val kcalTaken = SupplementLogic.kcalForDate(items, logs, todayIso)
@@ -77,13 +129,22 @@ fun SupplementsTodayCard(todayIso: String) {
                         Text(if (managing) "OK" else "Gérer")
                     }
                 }
-                TextButton(onClick = { editing = Supplement(0L, "") }) {
-                    Text("+ Ajouter")
-                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { launchScan() },
+                    enabled = !scanning,
+                    modifier = Modifier.weight(1f),
+                ) { Text(if (scanning) "Recherche…" else "📷 Scanner") }
+                Button(
+                    onClick = { editing = Supplement(0L, ""); scanMessage = null },
+                    enabled = !scanning,
+                    modifier = Modifier.weight(1f),
+                ) { Text("+ Ajouter") }
             }
 
             if (items.isEmpty()) {
-                Text("Aucun complément enregistré (Vitamine D, Oméga-3, Magnésium…). Ajoute-les ici pour les cocher chaque jour.",
+                Text("Aucun complément enregistré (Vitamine D, Oméga-3, Magnésium…). Scanne le code-barres ou ajoute-les ici pour les cocher chaque jour.",
                     style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             } else {
                 items.forEach { s ->
@@ -115,7 +176,7 @@ fun SupplementsTodayCard(todayIso: String) {
                                 info = if (SupplementScheduler.show(ctx, s, todayIso)) "Test envoyé pour « ${s.name} »."
                                 else "Notifications bloquées : autorise-les dans les réglages Android."
                             }) { Icon(Icons.Filled.Notifications, contentDescription = "Tester le rappel") }
-                            IconButton(onClick = { editing = s }) {
+                            IconButton(onClick = { editing = s; scanMessage = null }) {
                                 Icon(Icons.Filled.Edit, contentDescription = "Modifier")
                             }
                             IconButton(onClick = { deleting = s }) {
@@ -144,11 +205,13 @@ fun SupplementsTodayCard(todayIso: String) {
     editing?.let { current ->
         SupplementEditDialog(
             initial = current,
-            onDismiss = { editing = null },
+            scanMessage = scanMessage,
+            onDismiss = { editing = null; scanMessage = null },
             onSave = { saved ->
                 val final = if (saved.id <= 0L) saved.copy(id = SupplementLogic.nextId(Supplements.items)) else saved
                 Supplements.saveSupplement(ctx, final)
                 editing = null
+                scanMessage = null
             },
         )
     }
@@ -171,6 +234,7 @@ fun SupplementsManageCard() {
     val ctx = LocalContext.current
     val items = Supplements.items
     var editing by remember { mutableStateOf<Supplement?>(null) }
+    var scanMessage by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<Supplement?>(null) }
     var info by remember { mutableStateOf<String?>(null) }
     var pendingToggleId by remember { mutableStateOf<Long?>(null) }
@@ -192,7 +256,7 @@ fun SupplementsManageCard() {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("💊 Compléments alimentaires", style = MaterialTheme.typography.titleMedium)
-            Text("Vitamines, oméga-3, minéraux… Tu peux cocher tes prises dans « Aujourd'hui » et activer un rappel sonore par complément.",
+            Text("Vitamines, oméga-3, minéraux… Tu peux cocher tes prises dans « Aujourd'hui » et activer un rappel sonore par complément. Le bouton Scanner est dans Aujourd'hui et dans le formulaire d'ajout.",
                 style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             if (items.isEmpty()) {
                 Text("Aucun complément pour l'instant.", color = Color.Gray)
@@ -221,7 +285,7 @@ fun SupplementsManageCard() {
                                 }
                             },
                         )
-                        IconButton(onClick = { editing = s }) {
+                        IconButton(onClick = { editing = s; scanMessage = null }) {
                             Icon(Icons.Filled.Edit, contentDescription = "Modifier")
                         }
                         IconButton(onClick = { deleting = s }) {
@@ -230,7 +294,7 @@ fun SupplementsManageCard() {
                     }
                 }
             }
-            OutlinedButton(onClick = { editing = Supplement(0L, "") }) {
+            OutlinedButton(onClick = { editing = Supplement(0L, ""); scanMessage = null }) {
                 Text("+ Ajouter un complément")
             }
             info?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -240,11 +304,13 @@ fun SupplementsManageCard() {
     editing?.let { current ->
         SupplementEditDialog(
             initial = current,
-            onDismiss = { editing = null },
+            scanMessage = scanMessage,
+            onDismiss = { editing = null; scanMessage = null },
             onSave = { saved ->
                 val final = if (saved.id <= 0L) saved.copy(id = SupplementLogic.nextId(Supplements.items)) else saved
                 Supplements.saveSupplement(ctx, final)
                 editing = null
+                scanMessage = null
             },
         )
     }
@@ -275,24 +341,28 @@ private fun SupplementDeleteDialog(supplement: Supplement, onDismiss: () -> Unit
 @Composable
 private fun SupplementEditDialog(
     initial: Supplement,
+    scanMessage: String? = null,
     onDismiss: () -> Unit,
     onSave: (Supplement) -> Unit,
 ) {
     val ctx = LocalContext.current
-    var name by remember { mutableStateOf(initial.name) }
-    var dose by remember { mutableStateOf(initial.dose) }
+    val scope = rememberCoroutineScope()
+    var name by remember(initial.id, initial.barcode, initial.name) { mutableStateOf(initial.name) }
+    var dose by remember(initial.id, initial.barcode, initial.dose) { mutableStateOf(initial.dose) }
     var hour by remember { mutableStateOf(initial.hour) }
     var minute by remember { mutableStateOf(initial.minute) }
     var reminderEnabled by remember { mutableStateOf(initial.reminderEnabled) }
-    var kcalText by remember { mutableStateOf(initial.kcal?.toString() ?: "") }
+    var kcalText by remember(initial.id, initial.barcode, initial.kcal) { mutableStateOf(initial.kcal?.toString() ?: "") }
     val initInGrams = initial.omega3Mg != null && initial.omega3Mg >= 1000.0 && initial.omega3Mg % 1000.0 == 0.0
     var omegaInGrams by remember { mutableStateOf(initInGrams) }
-    var omegaText by remember {
+    var omegaText by remember(initial.id, initial.barcode, initial.omega3Mg) {
         mutableStateOf(
             initial.omega3Mg?.let { fmt(if (initInGrams) it / 1000.0 else it) } ?: "",
         )
     }
-    var testMsg by remember { mutableStateOf<String?>(null) }
+    var barcode by remember(initial.id, initial.barcode) { mutableStateOf(initial.barcode.orEmpty()) }
+    var testMsg by remember { mutableStateOf(scanMessage) }
+    var scanning by remember { mutableStateOf(false) }
 
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (!ok) {
@@ -301,6 +371,23 @@ private fun SupplementEditDialog(
         }
     }
     fun needsPerm() = Build.VERSION.SDK_INT >= 33 && !ReminderScheduler.canNotify(ctx)
+
+    fun applyDraft(draft: ScannedSupplementDraft) {
+        barcode = draft.barcode
+        if (draft.recognized) {
+            if (draft.name.isNotBlank()) name = draft.name
+            if (draft.dose.isNotBlank()) dose = draft.dose
+            draft.kcal?.let { kcalText = it.toString() }
+            draft.omega3Mg?.let { mg ->
+                val grams = mg >= 1000.0 && mg % 1000.0 == 0.0
+                omegaInGrams = grams
+                omegaText = fmt(if (grams) mg / 1000.0 else mg)
+            }
+            testMsg = draft.source?.let { "Fiche trouvée sur $it. Vérifie et enregistre." }
+        } else {
+            testMsg = draft.message ?: SupplementScanLogic.UNRECOGNIZED
+        }
+    }
 
     fun buildCandidate(): Supplement = Supplement(
         id = if (initial.id > 0L) initial.id else 1L,
@@ -312,6 +399,7 @@ private fun SupplementEditDialog(
         kcal = kcalText.trim().toIntOrNull()?.takeIf { it >= 0 },
         omega3Mg = SupplementLogic.parseOmega3ToMg(omegaText, omegaInGrams),
         createdDate = initial.createdDate,
+        barcode = barcode.trim().ifBlank { null },
     )
 
     AlertDialog(
@@ -322,6 +410,26 @@ private fun SupplementEditDialog(
                 Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                OutlinedButton(
+                    onClick = {
+                        startSupplementBarcodeScan(ctx, onCode = { code ->
+                            scanning = true
+                            testMsg = "Recherche du produit…"
+                            scope.launch {
+                                val draft = SupplementScanLogic.lookup(code)
+                                applyDraft(draft)
+                                scanning = false
+                            }
+                        }, onError = { testMsg = it })
+                    },
+                    enabled = !scanning,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(if (scanning) "Recherche…" else "📷 Scanner le code-barres") }
+
+                if (barcode.isNotBlank()) {
+                    Text("Code-barres : $barcode", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },

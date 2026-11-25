@@ -217,3 +217,31 @@ class SupplementReceiver : BroadcastReceiver() {
         }
     }
 }
+
+
+/** Démarre le même scanner Google que pour les aliments (EAN/UPC). */
+fun startSupplementBarcodeScan(
+    context: android.content.Context,
+    onCode: (String) -> Unit,
+    onError: (String) -> Unit,
+) {
+    val options = com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder()
+        .setBarcodeFormats(
+            com.google.mlkit.vision.barcode.common.Barcode.FORMAT_EAN_13,
+            com.google.mlkit.vision.barcode.common.Barcode.FORMAT_EAN_8,
+            com.google.mlkit.vision.barcode.common.Barcode.FORMAT_UPC_A,
+            com.google.mlkit.vision.barcode.common.Barcode.FORMAT_UPC_E,
+        )
+        .enableAutoZoom()
+        .build()
+    com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(context, options).startScan()
+        .addOnSuccessListener { b ->
+            val code = b.rawValue
+            if (code.isNullOrBlank()) onError("Code-barres illisible, réessaie.")
+            else onCode(code)
+        }
+        .addOnCanceledListener { }
+        .addOnFailureListener {
+            onError("Scanner indisponible (Google Play services requis ou module en cours de téléchargement). Tu peux saisir le nom et la dose à la main.")
+        }
+}

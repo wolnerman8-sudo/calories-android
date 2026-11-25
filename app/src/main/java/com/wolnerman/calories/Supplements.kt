@@ -15,6 +15,7 @@ data class Supplement(
     val kcal: Int? = null,
     val omega3Mg: Double? = null,
     val createdDate: String = "",
+    val barcode: String? = null,
 )
 
 /** Logique pure des compléments alimentaires et du suivi quotidien (testable sans Android). */
@@ -36,6 +37,7 @@ object SupplementLogic {
         reminderEnabled = s.reminderEnabled && s.hour != null,
         kcal = s.kcal?.takeIf { it >= 0 },
         omega3Mg = s.omega3Mg?.takeIf { !it.isNaN() && it >= 0.0 },
+        barcode = SupplementScanLogic.normalizeBarcode(s.barcode ?: ""),
     )
 
     fun upsert(list: List<Supplement>, s: Supplement): List<Supplement> {
@@ -138,6 +140,7 @@ object SupplementLogic {
                 s.kcal?.let { put("k", it) }
                 s.omega3Mg?.let { put("o3", it) }
                 if (s.createdDate.isNotBlank()) put("cd", s.createdDate)
+                s.barcode?.let { put("bc", it) }
             })
         }
     }.toString()
@@ -158,6 +161,7 @@ object SupplementLogic {
                 kcal = if (o.has("k") && !o.isNull("k")) o.optInt("k") else null,
                 omega3Mg = if (o.has("o3") && !o.isNull("o3")) o.optDouble("o3").takeIf { !it.isNaN() } else null,
                 createdDate = o.optString("cd", ""),
+                barcode = o.optString("bc", "").ifBlank { null },
             )
         }
     }.getOrDefault(emptyList())

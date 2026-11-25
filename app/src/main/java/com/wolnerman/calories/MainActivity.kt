@@ -193,11 +193,13 @@ fun TodayScreen(entries: List<Entry>, outcome: GoalOutcome, onPlanChange: (GoalP
     val ctx = LocalContext.current
     val profile = Storage(ctx).loadProfile()
     val lastWeighIn = BodyScaleManager.get(ctx).history.firstOrNull()?.kg
-    val proteinGoal = ProteinLogic.proteinGoal(ProteinLogic.currentWeight(profile.weightKg, lastWeighIn))
+    val weight = ProteinLogic.currentWeight(profile.weightKg, lastWeighIn)
+    val proteinGoal = ProteinLogic.proteinGoal(weight)
+    val targets = MacroGoalLogic.targets(outcome.kcal, weight)
     val macros = todays.macros()
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), contentPadding = PaddingValues(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { SummaryCard(total, outcome, macros, proteinGoal, onPlanChange) }
+        item { SummaryCard(total, outcome, macros, targets, onPlanChange) }
         item { ProteinDistributionHint(proteinGoal) { p -> onAdd(ProteinLogic.wheyEntry(p, System.currentTimeMillis(), today(), nowTime())) } }
         item { AddEntryCard(onAdd) }
         if (todays.isNotEmpty()) item { Text("Repas du jour", style = MaterialTheme.typography.titleMedium) }
@@ -207,7 +209,8 @@ fun TodayScreen(entries: List<Entry>, outcome: GoalOutcome, onPlanChange: (GoalP
 }
 
 @Composable
-fun SummaryCard(total: Int, outcome: GoalOutcome, macros: Macros, proteinGoal: Int = ProteinLogic.DEFAULT_GOAL,
+fun SummaryCard(total: Int, outcome: GoalOutcome, macros: Macros,
+                targets: MacroTargets = MacroGoalLogic.targets(outcome.kcal, null),
                 onPlanChange: (GoalPlan) -> Unit = {}) {
     val energy = outcome.energy
     val maintain = energy?.tdee
@@ -235,7 +238,7 @@ fun SummaryCard(total: Int, outcome: GoalOutcome, macros: Macros, proteinGoal: I
             MacroTotals(macros)
             MacroSplitBar(macros)
             Spacer(Modifier.height(4.dp))
-            ProteinProgress(macros.proteins, proteinGoal)
+            MacroGoalsProgress(macros, targets)
         }
     }
 }

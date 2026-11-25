@@ -13,7 +13,7 @@ class V22Test {
 
     // ---------- Rappel du soir ----------
     @Test fun reminderBelowGoal() {
-        assertEquals("Il te manque 650 kcal pour atteindre ton objectif de 2000 kcal aujourd'hui.", ReminderLogic.message(1350, 2000))
+        assertEquals("Il te manque 650 kcal", ReminderLogic.message(1350, 2000))
         assertNotNull(ReminderLogic.message(0, 1800))
     }
     @Test fun reminderGoalReached() {

@@ -9,6 +9,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -18,9 +20,10 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 
-/** Réglages du rappel (préférences simples, non sensibles). */
+/** Réglages des rappels (préférences simples, non sensibles). */
 class ReminderSettings(ctx: Context) {
     private val prefs = ctx.applicationContext.getSharedPreferences("reminder", Context.MODE_PRIVATE)
+    /** Rappel du soir (existant, désactivé par défaut). */
     var enabled: Boolean
         get() = prefs.getBoolean("enabled", false)
         set(v) { prefs.edit().putBoolean("enabled", v).apply() }
@@ -30,42 +33,84 @@ class ReminderSettings(ctx: Context) {
     var minute: Int
         get() = prefs.getInt("minute", ReminderLogic.DEFAULT_MINUTE)
         set(v) { prefs.edit().putInt("minute", v).apply() }
+    /** Rappel du matin : objectifs du jour (désactivé par défaut). */
+    var morningEnabled: Boolean
+        get() = prefs.getBoolean("morning_enabled", false)
+        set(v) { prefs.edit().putBoolean("morning_enabled", v).apply() }
+    var morningHour: Int
+        get() = prefs.getInt("morning_hour", ReminderLogic.DEFAULT_MORNING_HOUR)
+        set(v) { prefs.edit().putInt("morning_hour", v).apply() }
+    var morningMinute: Int
+        get() = prefs.getInt("morning_minute", ReminderLogic.DEFAULT_MORNING_MINUTE)
+        set(v) { prefs.edit().putInt("morning_minute", v).apply() }
 }
+
+enum class ReminderKind { EVENING, MORNING }
 
 /**
  * Programmation locale avec AlarmManager (alarme inexacte autorisée en veille : pas besoin de SCHEDULE_EXACT_ALARM ;
  * Android peut la décaler de quelques minutes). Le récepteur reprogramme le lendemain à chaque déclenchement.
  */
 object ReminderScheduler {
-    const val CHANNEL = "rappel_soir"
-    private const val ACTION = "com.wolnerman.calories.RAPPEL_SOIR"
-    private const val NOTIF_ID = 2001
+    /** Nouveau canal v2.17 : importance et son figés à la création, d'où un nouvel identifiant. */
+    const val CHANNEL = "rappels_v217"
+    private const val ACTION_EVENING = "com.wolnerman.calories.RAPPEL_SOIR"
+    private const val ACTION_MORNING = "com.wolnerman.calories.RAPPEL_MATIN"
+    private const val NOTIF_EVENING = 2001
+    private const val NOTIF_MORNING = 2002
     const val EXTRA_TAB = "tab"
 
-    private fun pending(ctx: Context): PendingIntent =
-        PendingIntent.getBroadcast(ctx, 1, Intent(ctx, ReminderReceiver::class.java).setAction(ACTION),
+    private fun pending(ctx: Context, code: Int, action: String): PendingIntent =
+        PendingIntent.getBroadcast(ctx, code, Intent(ctx, ReminderReceiver::class.java).setAction(action),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-    /** Programme (ou annule) selon les réglages. Renvoie l'heure du prochain rappel, ou null. */
+    private fun pendingEvening(ctx: Context) = pending(ctx, 1, ACTION_EVENING)
+    private fun pendingMorning(ctx: Context) = pending(ctx, 3, ACTION_MORNING)
+
+    private fun setAlarm(am: AlarmManager, at: LocalDateTime, pi: PendingIntent) {
+        val millis = at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        try { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pi) }
+        catch (e: Exception) { Log.w("Calories", "Rappel non programmé", e); am.set(AlarmManager.RTC_WAKEUP, millis, pi) }
+    }
+
+    /** Programme (ou annule) les deux rappels. Renvoie l'heure du prochain rappel du soir, ou null. */
     fun schedule(ctx: Context): LocalDateTime? {
         val s = ReminderSettings(ctx)
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return null
-        am.cancel(pending(ctx))
-        if (!s.enabled) return null
-        val next = ReminderLogic.nextTrigger(LocalDateTime.now(), s.hour, s.minute)
-        val millis = next.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        try { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending(ctx)) }
-        catch (e: Exception) { Log.w("Calories", "Rappel non programmé", e); am.set(AlarmManager.RTC_WAKEUP, millis, pending(ctx)) }
-        return next
+        val now = LocalDateTime.now()
+        am.cancel(pendingEvening(ctx))
+        val nextEvening = if (s.enabled) {
+            val next = ReminderLogic.nextTrigger(now, s.hour, s.minute)
+            setAlarm(am, next, pendingEvening(ctx))
+            next
+        } else null
+        am.cancel(pendingMorning(ctx))
+        if (s.morningEnabled) setAlarm(am, ReminderLogic.nextTrigger(now, s.morningHour, s.morningMinute), pendingMorning(ctx))
+        return nextEvening
+    }
+
+    fun nextMorning(ctx: Context): LocalDateTime? {
+        val s = ReminderSettings(ctx)
+        if (!s.morningEnabled) return null
+        return ReminderLogic.nextTrigger(LocalDateTime.now(), s.morningHour, s.morningMinute)
     }
 
     fun ensureChannel(ctx: Context) {
         if (Build.VERSION.SDK_INT >= 26) {
             val nm = ctx.getSystemService(NotificationManager::class.java)
-            if (nm.getNotificationChannel(CHANNEL) == null) nm.createNotificationChannel(
-                NotificationChannel(CHANNEL, "Rappel du soir", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                    description = "Rappel quotidien quand l'objectif de calories n'est pas atteint"
-                })
+            if (nm.getNotificationChannel(CHANNEL) == null) {
+                val sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                val attrs = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                nm.createNotificationChannel(
+                    NotificationChannel(CHANNEL, "Rappels (calories et macros)", NotificationManager.IMPORTANCE_HIGH).apply {
+                        description = "Rappel du matin (objectifs du jour) et du soir (ce qu'il te manque), avec son."
+                        setSound(sound, attrs)
+                        enableVibration(true)
+                    })
+            }
         }
     }
 
@@ -74,7 +119,7 @@ object ReminderScheduler {
             NotificationManagerCompat.from(ctx).areNotificationsEnabled()
 
     /** Affiche la notification (appui → appli ouverte sur « Aujourd'hui »). Renvoie false si interdit. */
-    fun show(ctx: Context, text: String): Boolean {
+    fun show(ctx: Context, text: String, title: String = "Calories — objectif du jour", id: Int = NOTIF_EVENING): Boolean {
         if (!canNotify(ctx)) return false
         ensureChannel(ctx)
         val open = PendingIntent.getActivity(ctx, 2,
@@ -82,31 +127,70 @@ object ReminderScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_notif)
-            .setContentTitle("Calories — objectif du jour")
+            .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(open)
             .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_SOUND)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .build()
-        return try { NotificationManagerCompat.from(ctx).notify(NOTIF_ID, n); true }
+        return try { NotificationManagerCompat.from(ctx).notify(id, n); true }
         catch (e: SecurityException) { false }
     }
 
-    /** Vérifie le total du jour et notifie si l'objectif n'est pas atteint. */
-    fun checkNow(ctx: Context): String? {
+    fun currentSnapshot(ctx: Context): Triple<Int, Macros, MacroTargets> {
         val storage = Storage(ctx.applicationContext)
-        val msg = ReminderLogic.message(ReminderLogic.todayTotal(storage.loadEntries(), LocalDate.now()), storage.currentGoal().kcal)
-        if (msg != null) show(ctx, msg)
+        val today = LocalDate.now()
+        val entries = storage.loadEntries()
+        val kcal = storage.currentGoal().kcal
+        val profile = storage.loadProfile()
+        val lastWeighIn = runCatching { BodyScaleManager.get(ctx.applicationContext).history.firstOrNull()?.kg }.getOrNull()
+        val weight = ProteinLogic.currentWeight(profile.weightKg, lastWeighIn)
+        val targets = MacroGoalLogic.targets(kcal, weight)
+        return Triple(ReminderLogic.todayTotal(entries, today), ReminderLogic.todayMacros(entries, today), targets)
+    }
+
+    /** Vérifie le total du jour et notifie selon le type de rappel. Renvoie le texte envoyé, ou null. */
+    fun checkNow(ctx: Context, kind: ReminderKind = ReminderKind.EVENING): String? {
+        val (total, macros, targets) = currentSnapshot(ctx)
+        val (msg, title, id) = when (kind) {
+            ReminderKind.MORNING -> Triple(ReminderLogic.morningMessage(targets), "Calories — objectifs du jour", NOTIF_MORNING)
+            ReminderKind.EVENING -> Triple(ReminderLogic.eveningMessage(total, targets, macros), "Calories — ce qu'il te manque", NOTIF_EVENING)
+        }
+        if (msg != null) show(ctx, msg, title, id)
         return msg
+    }
+
+    /** Texte de test (toujours non null) : format du soir, ou message positif + objectifs si tout est atteint. */
+    fun testEveningText(ctx: Context): Pair<String, String> {
+        val (total, macros, targets) = currentSnapshot(ctx)
+        val miss = ReminderLogic.eveningMessage(total, targets, macros)
+        return if (miss != null) miss to "Calories — ce qu'il te manque"
+        else {
+            val reached = ReminderLogic.reachedMessage(targets, total)
+            val obj = ReminderLogic.morningMessage(targets)
+            (if (obj != null) "$reached $obj" else reached) to "Calories — objectif atteint"
+        }
+    }
+
+    fun testMorningText(ctx: Context): String? {
+        val (_, _, targets) = currentSnapshot(ctx)
+        return ReminderLogic.morningMessage(targets)
     }
 }
 
-/** Déclenchement quotidien. */
+/** Déclenchement quotidien (matin ou soir, selon l'action). */
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        try { if (ReminderSettings(context).enabled) ReminderScheduler.checkNow(context) }
-        catch (e: Exception) { Log.w("Calories", "Rappel", e) }
+        val s = ReminderSettings(context)
+        try {
+            when (intent.action) {
+                "com.wolnerman.calories.RAPPEL_MATIN" -> if (s.morningEnabled) ReminderScheduler.checkNow(context, ReminderKind.MORNING)
+                else -> if (s.enabled) ReminderScheduler.checkNow(context, ReminderKind.EVENING)
+            }
+        } catch (e: Exception) { Log.w("Calories", "Rappel", e) }
         finally { runCatching { ReminderScheduler.schedule(context) } }
     }
 }

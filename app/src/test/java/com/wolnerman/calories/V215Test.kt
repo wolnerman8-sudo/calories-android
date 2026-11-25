@@ -86,8 +86,7 @@ class V215Test {
         assertEquals("Dépassement : 90 kcal au-delà de l'objectif", over.first)
         assertTrue(over.second)
         // rappel du soir : même formule, avec le nouvel objectif effectif
-        assertEquals("Il te manque 410 kcal pour atteindre ton objectif de 1910 kcal aujourd'hui.",
-            ReminderLogic.message(1500, 1910))
+        assertEquals("Il te manque 410 kcal", ReminderLogic.message(1500, 1910))
         assertNull(ReminderLogic.message(1910, 1910))
     }
 

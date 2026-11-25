@@ -75,62 +75,114 @@ fun ExportCard(entries: List<Entry>, goal: Int) {
 fun ReminderCard() {
     val ctx = LocalContext.current
     val settings = remember { ReminderSettings(ctx) }
-    var enabled by remember { mutableStateOf(settings.enabled) }
+    var eveningOn by remember { mutableStateOf(settings.enabled) }
+    var morningOn by remember { mutableStateOf(settings.morningEnabled) }
     var hour by remember { mutableIntStateOf(settings.hour) }
     var minute by remember { mutableIntStateOf(settings.minute) }
+    var morningHour by remember { mutableIntStateOf(settings.morningHour) }
+    var morningMinute by remember { mutableIntStateOf(settings.morningMinute) }
     var info by remember { mutableStateOf<String?>(null) }
-    var pendingTest by remember { mutableStateOf(false) }
+    var pendingTest by remember { mutableStateOf<String?>(null) } // "evening" ou "morning"
 
-    fun nextLabel(): String? = ReminderScheduler.schedule(ctx)?.let { n ->
-        val day = if (n.toLocalDate() == java.time.LocalDate.now()) "aujourd'hui" else "demain"
-        "Prochain rappel : $day à ${ReminderLogic.timeLabel(n.hour, n.minute)} (seulement si l'objectif n'est pas atteint)."
+    fun labelFor(next: java.time.LocalDateTime, suffix: String): String {
+        val day = if (next.toLocalDate() == java.time.LocalDate.now()) "aujourd'hui" else "demain"
+        return "$suffix $day à ${ReminderLogic.timeLabel(next.hour, next.minute)}"
     }
-    fun test() {
-        val storage = Storage(ctx.applicationContext)
-        val total = ReminderLogic.todayTotal(storage.loadEntries(), java.time.LocalDate.now())
-        val goal = storage.currentGoal().kcal
-        val text = ReminderLogic.message(total, goal)
-            ?: "Test : objectif atteint aujourd'hui ($total / $goal kcal), le vrai rappel ne serait pas envoyé."
-        info = if (ReminderScheduler.show(ctx, text)) "Notification de test envoyée."
+    fun refreshLabels(): String? {
+        ReminderScheduler.schedule(ctx)
+        val parts = mutableListOf<String>()
+        if (settings.morningEnabled) ReminderScheduler.nextMorning(ctx)?.let {
+            parts += labelFor(it, "Rappel du matin :")
+        }
+        if (settings.enabled) ReminderScheduler.schedule(ctx)?.let {
+            parts += labelFor(it, "Rappel du soir :") + " (seulement ce qu'il te manque)."
+        }
+        return parts.joinToString("\n").ifBlank { null }
+    }
+    fun testEvening() {
+        val (text, title) = ReminderScheduler.testEveningText(ctx)
+        info = if (ReminderScheduler.show(ctx, text, title)) "Notification de test envoyée."
+        else "Notifications bloquées : autorise-les dans les réglages Android de l'appli."
+    }
+    fun testMorning() {
+        val text = ReminderScheduler.testMorningText(ctx)
+        info = if (text == null) "Pas d'objectif kcal défini : le rappel du matin ne serait pas envoyé."
+        else if (ReminderScheduler.show(ctx, text, "Calories — objectifs du jour", 2002)) "Notification de test envoyée."
         else "Notifications bloquées : autorise-les dans les réglages Android de l'appli."
     }
 
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (!ok) info = "Sans l'autorisation des notifications, le rappel ne peut pas s'afficher. " +
             "Tu peux l'autoriser plus tard dans Réglages › Applis › Calories › Notifications."
-        else info = nextLabel()
-        if (pendingTest) { pendingTest = false; if (ok) test() }
+        else info = refreshLabels()
+        val t = pendingTest; pendingTest = null
+        if (ok && t == "evening") testEvening()
+        if (ok && t == "morning") testMorning()
     }
     fun needsPermission() = Build.VERSION.SDK_INT >= 33 && !ReminderScheduler.canNotify(ctx)
 
-    LaunchedEffect(Unit) { ReminderScheduler.ensureChannel(ctx); if (enabled) info = nextLabel() }
+    LaunchedEffect(Unit) { ReminderScheduler.ensureChannel(ctx); if (eveningOn || morningOn) info = refreshLabels() }
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Rappels", style = MaterialTheme.typography.titleMedium)
+            Text("Les notifications reprennent ton objectif effectif (Maintien, Perte, Prise ou personnalisé) " +
+                "ainsi que les repères de glucides, protéines et lipides. Elles sont sonores. Tout reste sur le téléphone.",
+                style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+
+            Text("Rappel du matin : objectifs du jour", style = MaterialTheme.typography.titleSmall)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Rappel du soir", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Switch(checked = enabled, onCheckedChange = { on ->
-                    enabled = on; settings.enabled = on
+                Text("Activer le rappel du matin", modifier = Modifier.weight(1f))
+                Switch(checked = morningOn, onCheckedChange = { on ->
+                    morningOn = on; settings.morningEnabled = on
                     if (on) {
-                        info = nextLabel()
+                        info = refreshLabels()
                         if (needsPermission()) permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    } else { ReminderScheduler.schedule(ctx); info = "Rappel désactivé." }
+                    } else { ReminderScheduler.schedule(ctx); info = refreshLabels() ?: "Rappel du matin désactivé." }
                 })
             }
-            Text("Chaque jour à l'heure choisie, si tu n'as pas encore atteint ton objectif de calories, " +
-                "une notification te dit combien il te manque. Tout reste sur le téléphone.",
+            Text("Une notification avec tes objectifs du jour (kcal, glucides, protéines, lipides). Désactivé par défaut.",
+                style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Heure : ", style = MaterialTheme.typography.bodyLarge)
+                OutlinedButton(onClick = {
+                    TimePickerDialog(ctx, { _, h, m ->
+                        morningHour = h; morningMinute = m; settings.morningHour = h; settings.morningMinute = m
+                        if (morningOn) info = refreshLabels()
+                    }, morningHour, morningMinute, true).show()
+                }) { Text(ReminderLogic.timeLabel(morningHour, morningMinute)) }
+            }
+            OutlinedButton(onClick = {
+                if (needsPermission()) { pendingTest = "morning"; permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) } else testMorning()
+            }) { Text("Tester le rappel du matin") }
+
+            Divider()
+
+            Text("Rappel du soir : ce qu'il te manque", style = MaterialTheme.typography.titleSmall)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Activer le rappel du soir", modifier = Modifier.weight(1f))
+                Switch(checked = eveningOn, onCheckedChange = { on ->
+                    eveningOn = on; settings.enabled = on
+                    if (on) {
+                        info = refreshLabels()
+                        if (needsPermission()) permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else { ReminderScheduler.schedule(ctx); info = refreshLabels() ?: "Rappel du soir désactivé." }
+                })
+            }
+            Text("Si une partie de l'objectif n'est pas encore atteinte, la notification indique ce qu'il te manque. " +
+                "Les macros déjà atteintes sont omises. Si tout est atteint, rien n'est envoyé.",
                 style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Heure : ", style = MaterialTheme.typography.bodyLarge)
                 OutlinedButton(onClick = {
                     TimePickerDialog(ctx, { _, h, m ->
                         hour = h; minute = m; settings.hour = h; settings.minute = m
-                        if (enabled) info = nextLabel()
+                        if (eveningOn) info = refreshLabels()
                     }, hour, minute, true).show()
                 }) { Text(ReminderLogic.timeLabel(hour, minute)) }
             }
             OutlinedButton(onClick = {
-                if (needsPermission()) { pendingTest = true; permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) } else test()
+                if (needsPermission()) { pendingTest = "evening"; permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) } else testEvening()
             }) { Text("Tester la notification") }
             info?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             Text("Android peut décaler le rappel de quelques minutes pour économiser la batterie.",

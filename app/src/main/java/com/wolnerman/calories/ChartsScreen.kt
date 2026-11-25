@@ -37,18 +37,18 @@ private fun f1(d: Double) = String.format(Locale.FRENCH, "%.0f", d)
 
 /** Onglet « Graphiques » : évolution des calories et macros, moyennes hebdo, détail d'un jour. */
 @Composable
-fun ChartsScreen(entries: List<Entry>, goal: Int) {
+fun ChartsScreen(entries: List<Entry>, goal: Int, suppKcalByDay: Map<String, Int> = emptyMap()) {
     var weeks by remember { mutableIntStateOf(1) }
     var offset by remember { mutableIntStateOf(0) }
     var selected by remember { mutableStateOf<LocalDate?>(null) }
     val today = LocalDate.now()
     val (start, end) = Stats.window(weeks, offset, today)
-    val days = remember(entries, start, end) { Stats.daily(entries, start, end) }
+    val days = remember(entries, start, end, suppKcalByDay) { Stats.daily(entries, start, end, suppKcalByDay) }
     val sum = remember(days, goal) { Stats.summary(days, goal) }
     val weekly = remember(days) { Stats.weekly(days) }
     LaunchedEffect(weeks, offset) { selected = null }
 
-    if (entries.isEmpty()) {
+    if (entries.isEmpty() && suppKcalByDay.isEmpty()) {
         Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
             Text("Pas encore de données : ajoute des aliments dans « Aujourd'hui » pour voir tes graphiques.",
                 color = Color.Gray, style = MaterialTheme.typography.bodyLarge)

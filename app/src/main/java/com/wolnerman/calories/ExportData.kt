@@ -49,25 +49,72 @@ object ExportData {
     val DAILY_HEADER = listOf("Date", "Aliments", "Total kcal", "Objectif kcal", "Écart (kcal)", "Dans l'objectif",
         "Glucides (g)", "Protéines (g)", "Lipides (g)")
 
-    /** Bilan par jour renseigné (objectif = objectif actuel de l'appli, l'historique des objectifs n'est pas conservé). */
-    fun dailyCsv(entries: List<Entry>, goal: Int): String = buildString {
-        append(BOM); append(row(*DAILY_HEADER.toTypedArray()))
-        for (d in dailyRows(entries)) {
-            append(row(d.date.toString(), d.count.toString(), d.kcal.toString(), goal.toString(), (d.kcal!! - goal).toString(),
-                if (d.kcal <= goal) "oui" else "non", num(d.carbs), num(d.proteins), num(d.fat)))
+    /** Bilan par jour renseigné (inclut les kcal des compléments cochés si fournis). */
+    fun dailyCsv(
+        entries: List<Entry>,
+        goal: Int,
+        supplements: List<Supplement> = emptyList(),
+        supplementLogs: Map<String, Set<Long>> = emptyMap(),
+    ): String = buildString {
+        val extraKcal = SupplementLogic.kcalByDate(supplements, supplementLogs)
+        val hasSuppCols = supplements.isNotEmpty()
+        val header = if (hasSuppCols) DAILY_HEADER + listOf("Compléments pris", "Oméga-3 (mg)") else DAILY_HEADER
+        append(BOM); append(row(*header.toTypedArray()))
+        for (d in dailyRows(entries, extraKcal)) {
+            val base = listOf(d.date.toString(), d.count.toString(), d.kcal.toString(), goal.toString(), (d.kcal!! - goal).toString(),
+                if (d.kcal <= goal) "oui" else "non", num(d.carbs), num(d.proteins), num(d.fat))
+            val cells = if (hasSuppCols) {
+                val ds = d.date.toString()
+                val takenNames = SupplementLogic.takenForDate(supplements, supplementLogs, ds).joinToString(", ") { it.name }
+                val omega3 = SupplementLogic.omega3MgForDate(supplements, supplementLogs, ds)
+                base + listOf(takenNames, if (omega3 > 0.0) num(omega3) else "")
+            } else base
+            append(row(*cells.toTypedArray()))
+        }
+    }
+
+    val SUPP_HEADER = listOf("Date", "Complément", "Dose", "Heure prévue", "Pris", "kcal", "Oméga-3 (mg)")
+
+    /** Historique des compléments alimentaires (prises et oublis par jour journalisé). */
+    fun supplementsCsv(
+        supplements: List<Supplement>,
+        supplementLogs: Map<String, Set<Long>>,
+        fallbackDate: String? = null,
+    ): String = buildString {
+        append(BOM); append(row(*SUPP_HEADER.toTypedArray()))
+        if (supplements.isEmpty()) return@buildString
+        val dates = supplementLogs.keys.sorted().ifEmpty { listOfNotNull(fallbackDate) }
+        for (date in dates) {
+            val active = SupplementLogic.activeForDate(supplements, supplementLogs, date)
+            for (s in active) {
+                val taken = SupplementLogic.isTaken(supplementLogs, date, s.id)
+                val time = if (s.hour != null && s.minute != null) ReminderLogic.timeLabel(s.hour, s.minute) else ""
+                append(row(
+                    date, s.name, s.dose, time, if (taken) "oui" else "non",
+                    s.kcal?.takeIf { it > 0 }?.toString() ?: "",
+                    s.omega3Mg?.takeIf { it > 0.0 }?.let { num(it) } ?: "",
+                ))
+            }
         }
     }
 
     /** Jours renseignés seulement, du plus ancien au plus récent. */
-    fun dailyRows(entries: List<Entry>): List<DayStat> {
-        if (entries.isEmpty()) return emptyList()
-        val dates = entries.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() }
+    fun dailyRows(entries: List<Entry>, extraKcalByDay: Map<String, Int> = emptyMap()): List<DayStat> {
+        val dates = entries.mapNotNull { runCatching { LocalDate.parse(it.date) }.getOrNull() } +
+            extraKcalByDay.filterValues { it > 0 }.keys.mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }
         if (dates.isEmpty()) return emptyList()
-        return Stats.daily(entries, dates.min(), dates.max()).filter { it.logged }
+        return Stats.daily(entries, dates.min(), dates.max(), extraKcalByDay).filter { it.logged }
     }
 
-    /** Export complet JSON (entrées + bilan quotidien). */
-    fun json(entries: List<Entry>, goal: Int, appVersion: String, exportedAt: String): String {
+    /** Export complet JSON (entrées + bilan quotidien + compléments si présents). */
+    fun json(
+        entries: List<Entry>,
+        goal: Int,
+        appVersion: String,
+        exportedAt: String,
+        supplements: List<Supplement> = emptyList(),
+        supplementLogs: Map<String, Set<Long>> = emptyMap(),
+    ): String {
         val arr = JSONArray()
         for (e in sorted(entries)) arr.put(JSONObject().apply {
             put("date", e.date); put("heure", e.time); put("aliment", e.name)
@@ -78,19 +125,42 @@ object ExportData {
             put("nutriments", JSONObject().apply { NUTRIENTS.forEach { n -> e.nutrient(n.key)?.let { put(n.key, round2(it)) } } })
             put("fermente", e.fermented); put("prebiotique", e.prebiotic)
         })
+        val extraKcal = SupplementLogic.kcalByDate(supplements, supplementLogs)
         val days = JSONArray()
-        for (d in dailyRows(entries)) days.put(JSONObject().apply {
+        for (d in dailyRows(entries, extraKcal)) days.put(JSONObject().apply {
             put("date", d.date.toString()); put("aliments", d.count); put("kcal", d.kcal); put("objectif", goal)
             put("glucides_g", d.carbs?.let { round2(it) } ?: JSONObject.NULL)
             put("proteines_g", d.proteins?.let { round2(it) } ?: JSONObject.NULL)
             put("lipides_g", d.fat?.let { round2(it) } ?: JSONObject.NULL)
         })
-        return JSONObject()
+        val root = JSONObject()
             .put("application", "Calories").put("version", appVersion).put("exporte_le", exportedAt)
             .put("objectif_kcal", goal)
             .put("unites_nutriments", JSONObject().apply { NUTRIENTS.forEach { put(it.key, it.unit) } })
             .put("entrees", arr).put("jours", days)
-            .toString(2)
+        if (supplements.isNotEmpty() || supplementLogs.isNotEmpty()) {
+            root.put("complements", JSONArray().apply {
+                supplements.forEach { s ->
+                    put(JSONObject().apply {
+                        put("id", s.id); put("nom", s.name); put("dose", s.dose)
+                        if (s.hour != null && s.minute != null) put("heure", ReminderLogic.timeLabel(s.hour, s.minute))
+                        put("rappel", s.reminderEnabled)
+                        s.kcal?.let { put("kcal", it) }
+                        s.omega3Mg?.let { put("omega3_mg", round2(it)) }
+                    })
+                }
+            })
+            val byId = supplements.associateBy { it.id }
+            root.put("prises_complements", JSONObject().apply {
+                supplementLogs.keys.sorted().forEach { date ->
+                    val ids = supplementLogs[date].orEmpty()
+                    put(date, JSONArray().apply {
+                        ids.sorted().forEach { id -> put(byId[id]?.name ?: id.toString()) }
+                    })
+                }
+            })
+        }
+        return root.toString(2)
     }
 
     private fun round2(d: Double) = Math.round(d * 100.0) / 100.0

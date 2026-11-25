@@ -38,7 +38,12 @@ fun shareExport(ctx: Context, fileName: String, content: String, mime: String): 
 } catch (e: Exception) { "Export impossible : ${e.message ?: e.javaClass.simpleName}" }
 
 @Composable
-fun ExportCard(entries: List<Entry>, goal: Int) {
+fun ExportCard(
+    entries: List<Entry>,
+    goal: Int,
+    supplements: List<Supplement> = emptyList(),
+    supplementLogs: Map<String, Set<Long>> = emptyMap(),
+) {
     val ctx = LocalContext.current
     var msg by remember { mutableStateOf<String?>(null) }
     val stamp = { LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HHmm")) }
@@ -48,22 +53,34 @@ fun ExportCard(entries: List<Entry>, goal: Int) {
             Text("Tout ton historique en fichier, à envoyer par mail, Drive, WhatsApp… " +
                 "Le CSV s'ouvre directement dans Excel / LibreOffice (séparateur « ; », virgule décimale).",
                 style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
-            if (entries.isEmpty()) {
-                Text("Aucune donnée à exporter pour l'instant : ajoute d'abord des aliments.", color = Color.Gray)
+            if (entries.isEmpty() && supplements.isEmpty()) {
+                Text("Aucune donnée à exporter pour l'instant : ajoute d'abord des aliments ou compléments.", color = Color.Gray)
             } else {
                 val days = entries.map { it.date }.distinct().size
-                Text("${entries.size} aliment(s) sur $days jour(s).", style = MaterialTheme.typography.bodySmall)
-                Button(onClick = {
-                    msg = shareExport(ctx, "calories_${stamp()}.csv", ExportData.entriesCsv(entries), "text/csv")
-                }, modifier = Modifier.fillMaxWidth()) { Text("Exporter les repas (CSV)") }
+                if (entries.isNotEmpty()) {
+                    Text("${entries.size} aliment(s) sur $days jour(s).", style = MaterialTheme.typography.bodySmall)
+                    Button(onClick = {
+                        msg = shareExport(ctx, "calories_${stamp()}.csv", ExportData.entriesCsv(entries), "text/csv")
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Exporter les repas (CSV)") }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = {
-                        msg = shareExport(ctx, "calories_jours_${stamp()}.csv", ExportData.dailyCsv(entries, goal), "text/csv")
-                    }, modifier = Modifier.weight(1f)) { Text("Bilan par jour (CSV)") }
+                    if (entries.isNotEmpty() || supplementLogs.isNotEmpty()) {
+                        OutlinedButton(onClick = {
+                            msg = shareExport(ctx, "calories_jours_${stamp()}.csv",
+                                ExportData.dailyCsv(entries, goal, supplements, supplementLogs), "text/csv")
+                        }, modifier = Modifier.weight(1f)) { Text("Bilan par jour (CSV)") }
+                    }
                     OutlinedButton(onClick = {
                         msg = shareExport(ctx, "calories_${stamp()}.json",
-                            ExportData.json(entries, goal, appVersion(ctx), LocalDateTime.now().toString()), "application/json")
+                            ExportData.json(entries, goal, appVersion(ctx), LocalDateTime.now().toString(), supplements, supplementLogs),
+                            "application/json")
                     }, modifier = Modifier.weight(1f)) { Text("Tout (JSON)") }
+                }
+                if (supplements.isNotEmpty()) {
+                    OutlinedButton(onClick = {
+                        msg = shareExport(ctx, "calories_complements_${stamp()}.csv",
+                            ExportData.supplementsCsv(supplements, supplementLogs, java.time.LocalDate.now().toString()), "text/csv")
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Compléments (CSV)") }
                 }
             }
             msg?.let { Text(it, color = Color(0xFFC62828)) }

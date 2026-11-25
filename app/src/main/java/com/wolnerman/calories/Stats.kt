@@ -50,15 +50,17 @@ object Stats {
         }
 
     /** Une entrée par jour de [start] à [end] inclus. Les macros sont null si aucune entrée du jour n'en a. */
-    fun daily(entries: List<Entry>, start: LocalDate, end: LocalDate): List<DayStat> {
+    fun daily(entries: List<Entry>, start: LocalDate, end: LocalDate, extraKcalByDay: Map<String, Int> = emptyMap()): List<DayStat> {
         val byDay = entries.groupBy { it.date }
         val out = ArrayList<DayStat>()
         var d = start
         while (!d.isAfter(end)) {
-            val list = byDay[d.toString()].orEmpty()
-            out += if (list.isEmpty()) DayStat(d, null, null, null, null, 0) else {
+            val key = d.toString()
+            val list = byDay[key].orEmpty()
+            val extra = extraKcalByDay[key] ?: 0
+            out += if (list.isEmpty() && extra <= 0) DayStat(d, null, null, null, null, 0) else {
                 val withMacros = list.filter { it.hasMacros }
-                DayStat(d, list.sumOf { it.kcal },
+                DayStat(d, list.sumOf { it.kcal } + extra,
                     if (withMacros.isEmpty()) null else list.sumOf { it.carbs },
                     if (withMacros.isEmpty()) null else list.sumOf { it.proteins },
                     if (withMacros.isEmpty()) null else list.sumOf { it.fat },

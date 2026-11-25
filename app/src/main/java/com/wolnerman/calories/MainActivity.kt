@@ -58,10 +58,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val storage = Storage(applicationContext)
         MyFoods.init(applicationContext)   // v2.8 : « Mes aliments »
+        Supplements.init(applicationContext) // v2.18 : compléments alimentaires
         // v2.0 : range une clé API collée dans le mauvais champ (ex. clé Groq dans Gemini) — une seule fois
         runCatching { SecureSettings(applicationContext).migrateV2() }
         // v2.2 : (re)programme le rappel du soir (au cas où l'alarme aurait été perdue, ex. arrêt forcé)
         runCatching { ReminderScheduler.schedule(applicationContext) }
+        runCatching { SupplementScheduler.scheduleAll(applicationContext) }
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = Color(0xFF2E7D32), secondary = Color(0xFFFFB300))) {
                 Surface(Modifier.fillMaxSize()) { CaloriesApp(storage) }
@@ -112,6 +114,17 @@ fun CaloriesApp(storage: Storage) {
 
     fun update(newList: List<Entry>) { entries = newList; storage.saveEntries(newList) }
     val appCtx = LocalContext.current.applicationContext
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, ev ->
+            if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME) Supplements.reloadIfInitialized(appCtx)
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+    val supplements = Supplements.items
+    val supplementLogs = Supplements.logs
+    val suppKcalByDay = remember(supplements, supplementLogs) { SupplementLogic.kcalByDate(supplements, supplementLogs) }
     val hcScope = rememberCoroutineScope()
     /** Santé Connect (si activé) : écrit les entrées ajoutées, supprime les entrées retirées. */
     fun syncHealth(added: List<Entry> = emptyList(), removed: List<Entry> = emptyList()) {
@@ -159,13 +172,13 @@ fun CaloriesApp(storage: Storage) {
         }
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
-            if (tab == 0) TodayScreen(entries, outcome,
+            if (tab == 0) TodayScreen(entries, outcome, supplements, supplementLogs,
                 onPlanChange = { setPlan(it) },
                 onAdd = { update(entries + it); syncHealth(added = listOf(it)) }, onDelete = { toDelete = it })
-            else if (tab == 1) HistoryScreen(entries, goal, onDelete = { toDelete = it })
-            else if (tab == 4) ChartsScreen(entries, goal)
+            else if (tab == 1) HistoryScreen(entries, goal, supplements, supplementLogs, onDelete = { toDelete = it })
+            else if (tab == 4) ChartsScreen(entries, goal, suppKcalByDay)
             else if (tab == 3) NutrientsScreen(entries, goal, profile.male)
-            else ProfileScreen(storage, outcome, entries, onPlanChange = { setPlan(it) })
+            else ProfileScreen(storage, outcome, entries, supplements, supplementLogs, onPlanChange = { setPlan(it) })
         }
     }
 
@@ -185,10 +198,19 @@ fun CaloriesApp(storage: Storage) {
 }
 
 @Composable
-fun TodayScreen(entries: List<Entry>, outcome: GoalOutcome, onPlanChange: (GoalPlan) -> Unit,
-                onAdd: (Entry) -> Unit, onDelete: (Entry) -> Unit) {
-    val todays = entries.filter { it.date == today() }.sortedByDescending { it.id }
-    val total = todays.sumOf { it.kcal }
+fun TodayScreen(
+    entries: List<Entry>,
+    outcome: GoalOutcome,
+    supplements: List<Supplement> = emptyList(),
+    supplementLogs: Map<String, Set<Long>> = emptyMap(),
+    onPlanChange: (GoalPlan) -> Unit,
+    onAdd: (Entry) -> Unit,
+    onDelete: (Entry) -> Unit,
+) {
+    val todayStr = today()
+    val todays = entries.filter { it.date == todayStr }.sortedByDescending { it.id }
+    val suppKcal = SupplementLogic.kcalForDate(supplements, supplementLogs, todayStr)
+    val total = todays.sumOf { it.kcal } + suppKcal
     // v2.7 / v2.14 : protéines et TDEE d'après le profil (poids éventuellement mis à jour par la balance)
     val ctx = LocalContext.current
     val profile = Storage(ctx).loadProfile()
@@ -199,7 +221,8 @@ fun TodayScreen(entries: List<Entry>, outcome: GoalOutcome, onPlanChange: (GoalP
     val macros = todays.macros()
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), contentPadding = PaddingValues(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { SummaryCard(total, outcome, macros, targets, onPlanChange) }
+        item { SummaryCard(total, outcome, macros, targets, onPlanChange, suppKcal) }
+        item { SupplementsTodayCard(todayStr) }
         item { ProteinDistributionHint(proteinGoal) { p -> onAdd(ProteinLogic.wheyEntry(p, System.currentTimeMillis(), today(), nowTime())) } }
         item { AddEntryCard(onAdd) }
         if (todays.isNotEmpty()) item { Text("Repas du jour", style = MaterialTheme.typography.titleMedium) }
@@ -211,7 +234,8 @@ fun TodayScreen(entries: List<Entry>, outcome: GoalOutcome, onPlanChange: (GoalP
 @Composable
 fun SummaryCard(total: Int, outcome: GoalOutcome, macros: Macros,
                 targets: MacroTargets = MacroGoalLogic.targets(outcome.kcal, null),
-                onPlanChange: (GoalPlan) -> Unit = {}) {
+                onPlanChange: (GoalPlan) -> Unit = {},
+                suppKcal: Int = 0) {
     val energy = outcome.energy
     val maintain = energy?.tdee
     val goal = outcome.kcal
@@ -224,6 +248,9 @@ fun SummaryCard(total: Int, outcome: GoalOutcome, macros: Macros,
             }
             GoalSelector(outcome, onPlanChange)
             Text("Consommé : $total kcal", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            if (suppKcal > 0) {
+                Text("Dont compléments : +$suppKcal kcal", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            }
             if (goal > 0) {
                 val (restLine, over) = EnergyLogic.remainingLine(total, goal, vsMaintain = outcome.plan.target == EnergyTarget.MAINTAIN)
                 Text(restLine, color = if (over) Color(0xFFC62828) else Color.Unspecified,
@@ -650,16 +677,28 @@ fun EntryRow(e: Entry, onDelete: (Entry) -> Unit) {
 }
 
 @Composable
-fun HistoryScreen(entries: List<Entry>, goal: Int, onDelete: (Entry) -> Unit) {
-    val byDay = entries.groupBy { it.date }.toSortedMap(compareByDescending { it })
-    if (byDay.isEmpty()) {
+fun HistoryScreen(
+    entries: List<Entry>,
+    goal: Int,
+    supplements: List<Supplement> = emptyList(),
+    supplementLogs: Map<String, Set<Long>> = emptyMap(),
+    onDelete: (Entry) -> Unit,
+) {
+    val byDay = entries.groupBy { it.date }
+    val allDays = (byDay.keys + supplementLogs.keys).sortedDescending()
+    if (allDays.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Historique vide.", color = Color.Gray) }
         return
     }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), contentPadding = PaddingValues(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        byDay.forEach { (day, list) ->
-            val total = list.sumOf { it.kcal }
+        allDays.forEach { day ->
+            val list = byDay[day].orEmpty()
+            val suppKcal = SupplementLogic.kcalForDate(supplements, supplementLogs, day)
+            val total = list.sumOf { it.kcal } + suppKcal
+            val taken = SupplementLogic.takenForDate(supplements, supplementLogs, day)
+            val notTaken = SupplementLogic.notTakenForDate(supplements, supplementLogs, day)
+            val omega3 = SupplementLogic.omega3MgForDate(supplements, supplementLogs, day)
             item(key = "h$day") {
                 Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -667,9 +706,20 @@ fun HistoryScreen(entries: List<Entry>, goal: Int, onDelete: (Entry) -> Unit) {
                         Text("$total / $goal kcal", fontWeight = FontWeight.Bold,
                             color = if (total > goal) Color(0xFFC62828) else MaterialTheme.colorScheme.primary)
                     }
-                    val m = list.macros()
-                    Text("Glucides ${g1(m.carbs)} g · Protéines ${g1(m.proteins)} g · Lipides ${g1(m.fat)} g",
-                        style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    if (list.isNotEmpty()) {
+                        val m = list.macros()
+                        Text("Glucides ${g1(m.carbs)} g · Protéines ${g1(m.proteins)} g · Lipides ${g1(m.fat)} g",
+                            style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
+                    if (taken.isNotEmpty() || notTaken.isNotEmpty()) {
+                        val suppParts = mutableListOf<String>()
+                        if (taken.isNotEmpty()) suppParts += "Pris : ${taken.joinToString(", ") { it.name }}"
+                        if (notTaken.isNotEmpty()) suppParts += "Non pris : ${notTaken.joinToString(", ") { it.name }}"
+                        if (omega3 > 0.0) suppParts += "Oméga-3 : ${SupplementLogic.formatOmega3(omega3)}"
+                        Text("💊 ${suppParts.joinToString(" · ")}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (taken.isNotEmpty()) Color(0xFF2E7D32) else Color.Gray)
+                    }
                 }
             }
             items(list.sortedByDescending { it.id }, key = { it.id }) { EntryRow(it, onDelete) }
@@ -679,7 +729,14 @@ fun HistoryScreen(entries: List<Entry>, goal: Int, onDelete: (Entry) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(storage: Storage, outcome: GoalOutcome, entries: List<Entry>, onPlanChange: (GoalPlan) -> Unit) {
+fun ProfileScreen(
+    storage: Storage,
+    outcome: GoalOutcome,
+    entries: List<Entry>,
+    supplements: List<Supplement> = emptyList(),
+    supplementLogs: Map<String, Set<Long>> = emptyMap(),
+    onPlanChange: (GoalPlan) -> Unit,
+) {
     val initial = remember { storage.loadProfile() }
     var age by remember { mutableStateOf(initial.age?.toString() ?: "") }
     var weight by remember { mutableStateOf(ProfileFmt.numberOrEmpty(initial.weightKg)) }
@@ -783,7 +840,8 @@ fun ProfileScreen(storage: Storage, outcome: GoalOutcome, entries: List<Entry>, 
             }
         }
         item { ReminderCard() }
-        item { ExportCard(entries, liveOutcome.kcal) }
+        item { SupplementsManageCard() }
+        item { ExportCard(entries, liveOutcome.kcal, supplements, supplementLogs) }
         item { HealthConnectCard(entries) { kg -> weight = ProfileFmt.number(kg) } }
         item { BodyScaleCard(profile.age) { kg -> weight = ProfileFmt.number(kg) } }
         item {

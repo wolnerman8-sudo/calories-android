@@ -149,7 +149,9 @@ object ReminderScheduler {
         val lastWeighIn = runCatching { BodyScaleManager.get(ctx.applicationContext).history.firstOrNull()?.kg }.getOrNull()
         val weight = ProteinLogic.currentWeight(profile.weightKg, lastWeighIn)
         val targets = MacroGoalLogic.targets(kcal, weight)
-        return Triple(ReminderLogic.todayTotal(entries, today), ReminderLogic.todayMacros(entries, today), targets)
+        Supplements.init(ctx.applicationContext)
+        val suppKcal = SupplementLogic.kcalForDate(Supplements.items, Supplements.logs, today.toString())
+        return Triple(ReminderLogic.todayTotal(entries, today) + suppKcal, ReminderLogic.todayMacros(entries, today), targets)
     }
 
     /** Vérifie le total du jour et notifie selon le type de rappel. Renvoie le texte envoyé, ou null. */
@@ -199,5 +201,6 @@ class ReminderReceiver : BroadcastReceiver() {
 class ReminderBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         runCatching { ReminderScheduler.schedule(context) }
+        runCatching { Supplements.init(context); SupplementScheduler.scheduleAll(context) }
     }
 }

@@ -47,6 +47,7 @@
             </intent-filter>
         </activity>
         <receiver android:name=".ReminderReceiver" android:exported="false" />
+        <receiver android:name=".SupplementReceiver" android:exported="false" />
         <receiver android:name=".ReminderBootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

@@ -96,30 +96,32 @@ class Storage(context: Context) {
         set(v) { prefs.edit().putInt("goal", v).apply() }
 }
 
-/** Profil utilisateur pour suggérer un objectif calorique (Mifflin-St Jeor). */
+/** Profil utilisateur (BMR / TDEE : voir [EnergyLogic]). */
 data class Profile(
     val age: Int? = null,
     val weightKg: Double? = null,
     val heightCm: Double? = null,
     val male: Boolean? = null,
     val activity: Int = 0, // index dans ACTIVITY_LEVELS
+    val fatPct: Double? = null, // v2.14 : % de masse grasse, facultatif (Katch-McArdle si 3–70)
 ) {
     /** Métabolisme de base (kcal/jour), null si le profil est incomplet. */
-    fun bmr(): Double? {
-        val a = age ?: return null; val w = weightKg ?: return null
-        val h = heightCm ?: return null; val m = male ?: return null
-        return 10 * w + 6.25 * h - 5 * a + if (m) 5 else -161
-    }
-    /** Besoin journalier estimé = BMR × facteur d'activité. */
-    fun suggestedGoal(): Int? = bmr()?.let { (it * ACTIVITY_LEVELS[activity].second).roundToInt() }
+    fun bmr(): Double? = EnergyLogic.compute(this)?.bmr
+    /** Besoin de maintien (TDEE) arrondi, à proposer comme objectif. */
+    fun suggestedGoal(): Int? = EnergyLogic.compute(this)?.tdee
 }
 
+/**
+ * Coefficients inchangés par rapport aux versions précédentes (même index).
+ * v2.14 : libellés alignés sur la convention habituelle —
+ * l'ancien « Actif (×1,725) » s'affiche désormais « Très actif » ; l'ancien « Très actif (×1,9) » devient « Extrême ».
+ */
 val ACTIVITY_LEVELS = listOf(
     "Sédentaire" to 1.2,
     "Léger" to 1.375,
     "Modéré" to 1.55,
-    "Actif" to 1.725,
-    "Très actif" to 1.9,
+    "Très actif" to 1.725,
+    "Extrême" to 1.9,
 )
 
 fun Storage.loadProfile(): Profile = profilePrefs().let { p ->
@@ -129,6 +131,7 @@ fun Storage.loadProfile(): Profile = profilePrefs().let { p ->
         heightCm = p.getFloat("height", -1f).takeIf { it > 0 }?.toDouble(),
         male = if (p.contains("male")) p.getBoolean("male", true) else null,
         activity = p.getInt("activity", 0).coerceIn(0, ACTIVITY_LEVELS.lastIndex),
+        fatPct = p.getFloat("fat_pct", -1f).takeIf { it > 0 }?.toDouble(),
     )
 }
 
@@ -139,5 +142,6 @@ fun Storage.saveProfile(pr: Profile) {
         if (pr.heightCm != null) putFloat("height", (Math.round(pr.heightCm * 10.0) / 10.0).toFloat()) else remove("height")
         if (pr.male != null) putBoolean("male", pr.male) else remove("male")
         putInt("activity", pr.activity)
+        if (pr.fatPct != null) putFloat("fat_pct", (Math.round(pr.fatPct * 10.0) / 10.0).toFloat()) else remove("fat_pct")
     }.apply()
 }

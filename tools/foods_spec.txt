@@ -420,11 +420,31 @@ R:1004:30,15006:15,19027:35,18041:20 | Punch coco | 60 | verre | |
 16400 | Beurre doux | 10 | noisette | beurre | 
 16402 | Beurre demi-sel | 10 | noisette | | 
 16601 | Margarine | 10 | noisette | | 
-17270 | Huile d'olive | 10 | c. à soupe | huile d'olive;huile olive | 
-17440 | Huile de tournesol | 10 | c. à soupe | huile;huile tournesol | 
-17130 | Huile de colza | 10 | c. à soupe | | 
-17040 | Huile d'arachide | 10 | c. à soupe | | 
-16040 | Huile de coco | 10 | c. à soupe | | 
+# v2.16 : huiles Ciqual 2025. Portion 10 g = 1 c. à soupe (ordre de grandeur, pas une valeur Ciqual ; 1 c. à café ≈ 4,5 g).
+# Déjà présentes (valeurs inchangées, aliases enrichis) : olive, tournesol, colza, arachide, coco.
+# Pas dans Ciqual : carthame. Huile de cameline (17800) : kcal et lipides totaux absents, non ajoutée.
+17270 | Huile d'olive | 10 | c. à soupe | huile d'olive;huile olive;huile d olive | 
+17440 | Huile de tournesol | 10 | c. à soupe | huile;huile tournesol;huile de tournesol | 
+17130 | Huile de colza | 10 | c. à soupe | huile de colza;huile colza;huile de colsa;huile colsa;colza | 
+17040 | Huile d'arachide | 10 | c. à soupe | huile d arachide;huile arachide | 
+16040 | Huile de coco | 10 | c. à soupe | huile de coco;huile coco;huile coprah;coprah | 
+17180 | Huile de lin | 10 | c. à soupe | huile de lin;huile lin | 
+17400 | Huile de sésame | 10 | c. à soupe | huile de sesame;huile sesame | 
+17220 | Huile de noix | 10 | c. à soupe | huile de noix;huile noix | 
+17350 | Huile de pépins de raisin | 10 | c. à soupe | huile pepins de raisin;huile de pepins;huile de pépins de raisin | 
+17190 | Huile de maïs | 10 | c. à soupe | huile de mais;huile mais;huile de maïs | 
+17420 | Huile de soja | 10 | c. à soupe | huile de soja;huile soja | 
+17100 | Huile d'avocat | 10 | c. à soupe | huile d avocat;huile avocat | 
+17210 | Huile de noisette | 10 | c. à soupe | huile de noisette;huile noisette | 
+16150 | Huile de palme | 10 | c. à soupe | huile de palme;huile palme | 
+17110 | Huile de germe de blé | 10 | c. à soupe | huile germe de ble;huile de germe de ble;germe de ble | 
+17700 | Huile combinée (mélange) | 10 | c. à soupe | huile combinee;huile mixte;huile isio;isio;melange d huiles;huile composee | 
+17701 | Huile olive et graines (mélange) | 10 | c. à soupe | huile olive et graines | 
+17850 | Huile de chanvre | 10 | c. à soupe | huile de chanvre;huile chanvre | 
+17900 | Huile d'argan | 10 | c. à soupe | huile d argan;huile argan;argan;argane | 
+17325 | Huile de pavot | 10 | c. à soupe | huile de pavot;huile pavot | 
+17001 | Huile végétale (moyenne) | 10 | c. à soupe | huile vegetale;huile végétale | 
+17030 | Huile d'amande | 10 | c. à soupe | huile d amande;huile amande | 
 11054 | Mayonnaise | 15 | c. à soupe | mayo | 
 11110 | Vinaigrette | 15 | c. à soupe | sauce salade | 
 11008 | Ketchup | 15 | c. à soupe | | 

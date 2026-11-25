@@ -450,11 +450,28 @@ Fromage affiné au lait cru (camembert lait cru)|Fromages|267|0|20.7|20.3|0|0|1.
 Beurre doux|Matières grasses et sauces|753|0.7|0.6|83|0|0.7|0.04|60|20|0|0|0|10|noisette|beurre||Ciqual 16400|
 Beurre demi-sel|Matières grasses et sauces|725|0.5|0.8|80|0|0.5|1.9|56.5|18|0.13|0|1.13|10|noisette|||Ciqual 16402|
 Margarine|Matières grasses et sauces|557|0.4|0.3|61.7|0|0.3|0.45|21.8|10|0.19|1|3.42|10|noisette|||Ciqual 16601|
-Huile d'olive|Matières grasses et sauces|899|0|0.2|99.9|0|0|0|15.2|0|0|0|0|10|c. à soupe|huile d'olive;huile olive||Ciqual 17270|
-Huile de tournesol|Matières grasses et sauces|900|0|0.2|100|0|0|0.03|11.1|0|0|0|0|10|c. à soupe|huile;huile tournesol||Ciqual 17440|
-Huile de colza|Matières grasses et sauces|900|0|0|100|0|0|0|7.3|0|0.02|0|0|10|c. à soupe|||Ciqual 17130|
-Huile d'arachide|Matières grasses et sauces|899|0|0.2|99.9|0|0|0|16.2|1|0|0|0|10|c. à soupe|||Ciqual 17040|
-Huile de coco|Matières grasses et sauces|897|0.4|0|99.5|0|0|0|84.5|1|0.04|0|0|10|c. à soupe|||Ciqual 16040|
+Huile d'olive|Matières grasses et sauces|899|0|0.2|99.9|0|0|0|15.2|0|0|0|0|10|c. à soupe|huile d'olive;huile olive;huile d olive||Ciqual 17270|
+Huile de tournesol|Matières grasses et sauces|900|0|0.2|100|0|0|0.03|11.1|0|0|0|0|10|c. à soupe|huile;huile tournesol;huile de tournesol||Ciqual 17440|
+Huile de colza|Matières grasses et sauces|900|0|0|100|0|0|0|7.3|0|0.02|0|0|10|c. à soupe|huile de colza;huile colza;huile de colsa;huile colsa;colza||Ciqual 17130|
+Huile d'arachide|Matières grasses et sauces|899|0|0.2|99.9|0|0|0|16.2|1|0|0|0|10|c. à soupe|huile d arachide;huile arachide||Ciqual 17040|
+Huile de coco|Matières grasses et sauces|897|0.4|0|99.5|0|0|0|84.5|1|0.04|0|0|10|c. à soupe|huile de coco;huile coco;huile coprah;coprah||Ciqual 16040|
+Huile de lin|Matières grasses et sauces|900|0|0|100|0|0|0|9|1|0|0|0|10|c. à soupe|huile de lin;huile lin||Ciqual 17180|
+Huile de sésame|Matières grasses et sauces|900|0|0|100|0|0|0|14.9|0|0|0|0|10|c. à soupe|huile de sesame;huile sesame||Ciqual 17400|
+Huile de noix|Matières grasses et sauces|900|0|0|100|0|0|0|10|0|0|0|0|10|c. à soupe|huile de noix;huile noix||Ciqual 17220|
+Huile de pépins de raisin|Matières grasses et sauces|900|0|0|100|0|0|0|11.4|0|0|0|0|10|c. à soupe|huile pepins de raisin;huile de pepins;huile de pépins de raisin||Ciqual 17350|
+Huile de maïs|Matières grasses et sauces|900|0|0|100|0|0|0|12.9|0|0|0|0|10|c. à soupe|huile de mais;huile mais;huile de maïs||Ciqual 17190|
+Huile de soja|Matières grasses et sauces|900|0|0|100|0|0|0|15.7|0|0.04|0|0|10|c. à soupe|huile de soja;huile soja||Ciqual 17420|
+Huile d'avocat|Matières grasses et sauces|900|0|0|100|0|0|0|17.9|0|0|0||10|c. à soupe|huile d avocat;huile avocat||Ciqual 17100|
+Huile de noisette|Matières grasses et sauces|900|0|0|100|0|0|0|8.3|0|0|0|0|10|c. à soupe|huile de noisette;huile noisette||Ciqual 17210|
+Huile de palme|Matières grasses et sauces|900|0|0|100|0|0|0|49.3|0|0.01|0|0|10|c. à soupe|huile de palme;huile palme||Ciqual 16150|
+Huile de germe de blé|Matières grasses et sauces|900|0|0|100|0|0|0|18.8|0|0|0|0|10|c. à soupe|huile germe de ble;huile de germe de ble;germe de ble||Ciqual 17110|
+Huile combinée (mélange)|Matières grasses et sauces|897|0.5|0|99.5|0|0|0.01|10.3|0|0.01|0|0|10|c. à soupe|huile combinee;huile mixte;huile isio;isio;melange d huiles;huile composee||Ciqual 17700|
+Huile olive et graines (mélange)|Matières grasses et sauces|900|0|0|100|0|0|0|12.1|0|0|0|5|10|c. à soupe|huile olive et graines||Ciqual 17701|
+Huile de chanvre|Matières grasses et sauces|900|0|0|100|0|0|0|10.5|||||10|c. à soupe|huile de chanvre;huile chanvre||Ciqual 17850|
+Huile d'argan|Matières grasses et sauces|889|0|0|98.7|0|0||17.6|||||10|c. à soupe|huile d argan;huile argan;argan;argane||Ciqual 17900|
+Huile de pavot|Matières grasses et sauces|900|0|0|100|0|0|0|13.5|0|0|0||10|c. à soupe|huile de pavot;huile pavot||Ciqual 17325|
+Huile végétale (moyenne)|Matières grasses et sauces|899|0|0.2|99.9|0|0|0.01|12.9|0|0.02|0|0.11|10|c. à soupe|huile vegetale;huile végétale||Ciqual 17001|
+Huile d'amande|Matières grasses et sauces|900|0|0|100|0|0|0|8.2|0|0|0|0|10|c. à soupe|huile d amande;huile amande||Ciqual 17030|
 Mayonnaise|Matières grasses et sauces|692|3.4|1.3|74.5|0.3|1.2|1.4|6.8|18|0.34|0|0|15|c. à soupe|mayo||Ciqual 11054|
 Vinaigrette|Matières grasses et sauces|475|2.9|0.6|51|0.8|2.1|2.2|5.5|20|0.64|0|0|15|c. à soupe|sauce salade||Ciqual 11110|
 Ketchup|Matières grasses et sauces|108|23.7|1.2|0.2|1.8|21.1|2.35|0|21|0.77|10.2|0|15|c. à soupe|||Ciqual 11008|

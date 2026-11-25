@@ -78,7 +78,7 @@ class V210Test {
     }
 
     @Test fun builtinParsingHasAllFoods() {
-        assertEquals(545, BUILTIN_FOODS.size)
+        assertEquals(562, BUILTIN_FOODS.size)
         assertTrue(BUILTIN_FOODS.count { it.nutrients["fiber"] != null } > 450)
     }
 }

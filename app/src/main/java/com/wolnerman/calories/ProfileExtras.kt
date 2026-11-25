@@ -88,8 +88,9 @@ fun ReminderCard() {
     fun test() {
         val storage = Storage(ctx.applicationContext)
         val total = ReminderLogic.todayTotal(storage.loadEntries(), java.time.LocalDate.now())
-        val text = ReminderLogic.message(total, storage.dailyGoal)
-            ?: "Test : objectif atteint aujourd'hui ($total / ${storage.dailyGoal} kcal), le vrai rappel ne serait pas envoyé."
+        val goal = storage.currentGoal().kcal
+        val text = ReminderLogic.message(total, goal)
+            ?: "Test : objectif atteint aujourd'hui ($total / $goal kcal), le vrai rappel ne serait pas envoyé."
         info = if (ReminderScheduler.show(ctx, text)) "Notification de test envoyée."
         else "Notifications bloquées : autorise-les dans les réglages Android de l'appli."
     }

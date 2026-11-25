@@ -96,7 +96,7 @@ object ReminderScheduler {
     /** Vérifie le total du jour et notifie si l'objectif n'est pas atteint. */
     fun checkNow(ctx: Context): String? {
         val storage = Storage(ctx.applicationContext)
-        val msg = ReminderLogic.message(ReminderLogic.todayTotal(storage.loadEntries(), LocalDate.now()), storage.dailyGoal)
+        val msg = ReminderLogic.message(ReminderLogic.todayTotal(storage.loadEntries(), LocalDate.now()), storage.currentGoal().kcal)
         if (msg != null) show(ctx, msg)
         return msg
     }

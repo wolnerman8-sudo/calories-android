@@ -94,6 +94,45 @@ class Storage(context: Context) {
     var dailyGoal: Int
         get() = prefs.getInt("goal", 2000)
         set(v) { prefs.edit().putInt("goal", v).apply() }
+
+    /** v2.15 : une seule fois, classer l'ancien objectif en maintien (≈ TDEE) ou personnalisé. */
+    fun migrateGoalIfNeeded() {
+        if (prefs.getBoolean("goal_v215", false)) return
+        val plan = EnergyLogic.migrate(dailyGoal, EnergyLogic.compute(loadProfile())?.tdee)
+        prefs.edit()
+            .putString("goal_mode", plan.target.name)
+            .putInt("goal_delta", plan.delta)
+            .putBoolean("goal_v215", true)
+            .apply()
+    }
+
+    fun loadGoalPlan(): GoalPlan {
+        migrateGoalIfNeeded()
+        val mode = prefs.getString("goal_mode", null)?.let { runCatching { EnergyTarget.valueOf(it) }.getOrNull() }
+            ?: EnergyTarget.CUSTOM
+        val delta = prefs.getInt("goal_delta", EnergyLogic.DEFAULT_DELTA)
+        return GoalPlan(mode, delta, dailyGoal.takeIf { it > 0 })
+    }
+
+    fun saveGoalPlan(p: GoalPlan) {
+        val clamped = p.copy(delta = EnergyLogic.clampDelta(p.delta))
+        val ed = prefs.edit()
+            .putString("goal_mode", clamped.target.name)
+            .putInt("goal_delta", clamped.delta)
+            .putBoolean("goal_v215", true)
+        clamped.customKcal?.takeIf { it > 0 }?.let { ed.putInt("goal", it) }
+        ed.apply()
+        // Met aussi à jour « goal » pour les modes calculés, afin qu'un export ou un ancien chemin voie la bonne valeur
+        val out = currentGoal(clamped)
+        if (out.kcal > 0) dailyGoal = out.kcal
+    }
+
+    /** Objectif effectif (recalculé d'après le profil actuel, sauf en personnalisé). */
+    fun currentGoal(plan: GoalPlan = loadGoalPlan()): GoalOutcome {
+        migrateGoalIfNeeded()
+        val p = loadProfile()
+        return EnergyLogic.plan(EnergyLogic.compute(p), plan, p.male)
+    }
 }
 
 /** Profil utilisateur (BMR / TDEE : voir [EnergyLogic]). */

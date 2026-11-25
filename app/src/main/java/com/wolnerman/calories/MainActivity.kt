@@ -101,10 +101,14 @@ private fun prettyDate(iso: String): String {
 @Composable
 fun CaloriesApp(storage: Storage) {
     var entries by remember { mutableStateOf(storage.loadEntries()) }
-    var goal by remember { mutableIntStateOf(storage.dailyGoal) }
+    var plan by remember { mutableStateOf(storage.loadGoalPlan()) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showGoalDialog by remember { mutableStateOf(false) }
     var toDelete by remember { mutableStateOf<Entry?>(null) }
+    val profile = storage.loadProfile()
+    val outcome = EnergyLogic.plan(EnergyLogic.compute(profile), plan, profile.male)
+    val goal = outcome.kcal
+    fun setPlan(p: GoalPlan) { plan = p; storage.saveGoalPlan(p) }
 
     fun update(newList: List<Entry>) { entries = newList; storage.saveEntries(newList) }
     val appCtx = LocalContext.current.applicationContext
@@ -155,33 +159,18 @@ fun CaloriesApp(storage: Storage) {
         }
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
-            if (tab == 0) TodayScreen(entries, goal,
+            if (tab == 0) TodayScreen(entries, outcome,
+                onPlanChange = { setPlan(it) },
                 onAdd = { update(entries + it); syncHealth(added = listOf(it)) }, onDelete = { toDelete = it })
             else if (tab == 1) HistoryScreen(entries, goal, onDelete = { toDelete = it })
             else if (tab == 4) ChartsScreen(entries, goal)
-            else if (tab == 3) NutrientsScreen(entries, goal, storage.loadProfile().male)
-            else ProfileScreen(storage, goal, entries, onUseGoal = { goal = it; storage.dailyGoal = it })
+            else if (tab == 3) NutrientsScreen(entries, goal, profile.male)
+            else ProfileScreen(storage, outcome, entries, onPlanChange = { setPlan(it) })
         }
     }
 
     if (showGoalDialog) {
-        var txt by remember { mutableStateOf(goal.toString()) }
-        AlertDialog(
-            onDismissRequest = { showGoalDialog = false },
-            title = { Text("Objectif journalier") },
-            text = {
-                OutlinedTextField(txt, { txt = it.filter(Char::isDigit).take(5) },
-                    label = { Text("kcal par jour") }, singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    txt.toIntOrNull()?.takeIf { it > 0 }?.let { goal = it; storage.dailyGoal = it }
-                    showGoalDialog = false
-                }) { Text("Enregistrer") }
-            },
-            dismissButton = { TextButton(onClick = { showGoalDialog = false }) { Text("Annuler") } }
-        )
+        GoalDialog(outcome, profile.male, onChange = { setPlan(it) }, onDismiss = { showGoalDialog = false })
     }
 
     toDelete?.let { e ->
@@ -196,7 +185,8 @@ fun CaloriesApp(storage: Storage) {
 }
 
 @Composable
-fun TodayScreen(entries: List<Entry>, goal: Int, onAdd: (Entry) -> Unit, onDelete: (Entry) -> Unit) {
+fun TodayScreen(entries: List<Entry>, outcome: GoalOutcome, onPlanChange: (GoalPlan) -> Unit,
+                onAdd: (Entry) -> Unit, onDelete: (Entry) -> Unit) {
     val todays = entries.filter { it.date == today() }.sortedByDescending { it.id }
     val total = todays.sumOf { it.kcal }
     // v2.7 / v2.14 : protéines et TDEE d'après le profil (poids éventuellement mis à jour par la balance)
@@ -204,11 +194,10 @@ fun TodayScreen(entries: List<Entry>, goal: Int, onAdd: (Entry) -> Unit, onDelet
     val profile = Storage(ctx).loadProfile()
     val lastWeighIn = BodyScaleManager.get(ctx).history.firstOrNull()?.kg
     val proteinGoal = ProteinLogic.proteinGoal(ProteinLogic.currentWeight(profile.weightKg, lastWeighIn))
-    val energy = EnergyLogic.compute(profile)
     val macros = todays.macros()
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), contentPadding = PaddingValues(vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { SummaryCard(total, goal, macros, proteinGoal, energy) }
+        item { SummaryCard(total, outcome, macros, proteinGoal, onPlanChange) }
         item { ProteinDistributionHint(proteinGoal) { p -> onAdd(ProteinLogic.wheyEntry(p, System.currentTimeMillis(), today(), nowTime())) } }
         item { AddEntryCard(onAdd) }
         if (todays.isNotEmpty()) item { Text("Repas du jour", style = MaterialTheme.typography.titleMedium) }
@@ -218,54 +207,34 @@ fun TodayScreen(entries: List<Entry>, goal: Int, onAdd: (Entry) -> Unit, onDelet
 }
 
 @Composable
-fun SummaryCard(total: Int, goal: Int, macros: Macros, proteinGoal: Int = ProteinLogic.DEFAULT_GOAL,
-                energy: EnergyResult? = null) {
+fun SummaryCard(total: Int, outcome: GoalOutcome, macros: Macros, proteinGoal: Int = ProteinLogic.DEFAULT_GOAL,
+                onPlanChange: (GoalPlan) -> Unit = {}) {
+    val energy = outcome.energy
     val maintain = energy?.tdee
-    // Barre principale : maintien si l'objectif est le TDEE (ou pas d'objectif distinct), sinon l'objectif choisi
-    val barGoal = if (maintain != null && (goal <= 0 || goal == maintain)) maintain else goal
-    val ratio = if (barGoal > 0) total.toFloat() / barGoal else 0f
-    val overGoal = goal > 0 && total > goal
+    val goal = outcome.kcal
+    val ratio = if (goal > 0) total.toFloat() / goal else 0f
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (maintain != null) {
                 Text("Pour maintenir votre poids : ${maintain} kcal", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(energy!!.formulaLine, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                Spacer(Modifier.height(8.dp))
-                Text("Consommé : $total kcal", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                val (restLine, overMaint) = EnergyLogic.remainingLine(total, maintain)
-                Text(restLine, color = if (overMaint) Color(0xFFC62828) else Color.Unspecified,
-                    fontWeight = if (overMaint) FontWeight.SemiBold else FontWeight.Normal)
-            } else {
-                Text("Total aujourd'hui", style = MaterialTheme.typography.labelLarge)
-                Text("$total kcal", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             }
-            if (barGoal > 0) {
-                Spacer(Modifier.height(8.dp))
+            GoalSelector(outcome, onPlanChange)
+            Text("Consommé : $total kcal", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            if (goal > 0) {
+                val (restLine, over) = EnergyLogic.remainingLine(total, goal, vsMaintain = outcome.plan.target == EnergyTarget.MAINTAIN)
+                Text(restLine, color = if (over) Color(0xFFC62828) else Color.Unspecified,
+                    fontWeight = if (over) FontWeight.SemiBold else FontWeight.Normal)
                 LinearProgressIndicator(progress = { ratio.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth().height(10.dp),
-                    color = if (total > barGoal) Color(0xFFC62828) else MaterialTheme.colorScheme.primary)
+                    color = if (total > goal) Color(0xFFC62828) else MaterialTheme.colorScheme.primary)
+            } else if (maintain == null) {
+                Text("Total aujourd'hui", style = MaterialTheme.typography.labelLarge)
             }
-            // Objectif distinct du maintien : on le montre sans doubler la barre si c'est le même nombre
-            if (maintain != null && goal > 0 && goal != maintain) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    if (overGoal) "Objectif dépassé de ${total - goal} kcal (objectif : $goal)"
-                    else "Objectif : reste ${goal - total} kcal sur $goal",
-                    color = if (overGoal) Color(0xFFC62828) else Color.Unspecified,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            } else if (maintain == null && goal > 0) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    if (overGoal) "Objectif dépassé de ${total - goal} kcal (objectif : $goal)"
-                    else "Reste ${goal - total} kcal sur $goal",
-                    color = if (overGoal) Color(0xFFC62828) else Color.Unspecified
-                )
-            }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(4.dp))
             MacroTotals(macros)
             MacroSplitBar(macros)
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(4.dp))
             ProteinProgress(macros.proteins, proteinGoal)
         }
     }
@@ -707,7 +676,7 @@ fun HistoryScreen(entries: List<Entry>, goal: Int, onDelete: (Entry) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(storage: Storage, goal: Int, entries: List<Entry>, onUseGoal: (Int) -> Unit) {
+fun ProfileScreen(storage: Storage, outcome: GoalOutcome, entries: List<Entry>, onPlanChange: (GoalPlan) -> Unit) {
     val initial = remember { storage.loadProfile() }
     var age by remember { mutableStateOf(initial.age?.toString() ?: "") }
     var weight by remember { mutableStateOf(ProfileFmt.numberOrEmpty(initial.weightKg)) }
@@ -727,6 +696,7 @@ fun ProfileScreen(storage: Storage, goal: Int, entries: List<Entry>, onUseGoal: 
     // Sauvegarde automatique à chaque modification
     LaunchedEffect(profile) { storage.saveProfile(profile) }
     val energy = EnergyLogic.compute(profile)
+    val liveOutcome = EnergyLogic.plan(energy, outcome.plan, profile.male)
     val suggested = energy?.tdee
     val fatIgnored = fat.isNotBlank() && EnergyLogic.validFatPct(profile.fatPct) == null
 
@@ -798,21 +768,19 @@ fun ProfileScreen(storage: Storage, goal: Int, entries: List<Entry>, onUseGoal: 
                             Text("Masse maigre : ${ProfileFmt.number(it)} kg (à ${ProfileFmt.number(energy.fatPct!!)} % de masse grasse)",
                                 style = MaterialTheme.typography.bodySmall)
                         }
-                        Text("Estimation indicative, pas un avis médical. Plus tard tu pourras choisir un objectif de maintien, perte ou prise ; pour l'instant tu peux copier ce TDEE comme objectif.",
+                        Text("Estimation indicative, pas un avis médical.",
                             style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                        Button(onClick = { onUseGoal(energy.tdee) }, enabled = energy.tdee != goal) {
-                            Text(if (energy.tdee == goal) "Objectif déjà appliqué" else "Utiliser comme objectif")
-                        }
                     } else {
                         Text("Remplis âge, poids, taille et sexe (Mifflin-St Jeor), ou le poids et le % de masse grasse (Katch-McArdle).", color = Color.Gray)
                     }
-                    Text("Objectif actuel : $goal kcal (modifiable via « Objectif » en haut). Le rappel du soir et la barre d'objectif suivent cet objectif, pas seulement le TDEE.",
+                    GoalSelector(liveOutcome, onPlanChange)
+                    Text("Le rappel du soir, la barre et les graphiques suivent cet objectif. Tu peux aussi le changer via « Objectif » en haut.",
                         style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
         item { ReminderCard() }
-        item { ExportCard(entries, goal) }
+        item { ExportCard(entries, liveOutcome.kcal) }
         item { HealthConnectCard(entries) { kg -> weight = ProfileFmt.number(kg) } }
         item { BodyScaleCard(profile.age) { kg -> weight = ProfileFmt.number(kg) } }
         item {

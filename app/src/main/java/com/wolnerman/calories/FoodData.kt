@@ -287,10 +287,10 @@ Artichaut cuit|Légumes|33|1|2.5|0.3|8.3|1|0.15|0.1|43|0.67|9.1|0|150|portion|ar
 Asperges vertes cuites|Légumes|25|1.7|2.7|0.3|2.2|1.3|0|0.1|21|0.64|4.7||100|portion|asperge;asperges|P|Ciqual 20299|
 Topinambour cuit|Légumes|69|14.4|1.8|0|2.2|1.7|0.09|0|33|0.2|3.2|0|150|portion|topinambour|P|Ciqual 20050|
 Endive crue|Légumes|17|2.8|1.2|0|1.1|2.4|0|0|20|0.12|2.1|0|100|endive|endive||Ciqual 20026|
-Fenouil cru|Légumes|18|2.6|1|0|2.6|2.2|0.06|0|37|0.2|2.6|0|100|portion|||Ciqual 20028|
+Fenouil cru|Légumes|18|2.6|1|0|2.6|2.2|0.06|0|37|0.2|2.6|0|100|portion|fenouil||Ciqual 20028|
 Cresson|Légumes|16|1.1|2.3|0.1|0.5|0.2|0.1|0|120|0.2|43|0|50|portion|||Ciqual 20022|
-Persil frais|Légumes|42|4.1|3|0.6|4.3|0.8|0.59|0.1|138|6.2|133|0|5|c. à soupe|||Ciqual 11014|
-Gingembre frais|Légumes|33|3.4|1.1|1.1|2.7|1|0.02|0.1|11|0.4|0|0|5|morceau|||Ciqual 11074|
+Persil frais|Légumes|42|4.1|3|0.6|4.3|0.8|0.59|0.1|138|6.2|133|0|5|c. à soupe|persil||Ciqual 11014|
+Gingembre frais|Légumes|33|3.4|1.1|1.1|2.7|1|0.02|0.1|11|0.4|0|0|5|morceau|gingembre;gingembre frais||Ciqual 11074|
 Piment (cru)|Légumes|37|5.8|1.9|0.4|1.5|4|0.02|0|14|1.03|144|0|5|piment|piment;bondamanpiment;piment antillais||Ciqual 20151|
 Avocat|Légumes|203|0|1.6|20.6|3.6|0.4|0.01|4.5|9|0.34|0|0|150|avocat (chair)|avocat;zaboka||Ciqual 13004|
 Ratatouille|Légumes|57|5|1.2|3.1|2|3.9|0.94|0.5|16|0.38|25.2|0|200|portion|||Ciqual 25018|
@@ -358,8 +358,47 @@ Graines de chanvre (décortiquées)|Fruits à coque et graines|617|5.4|30.8|48.8
 Graines de pavot|Fruits à coque et graines|534|13.7|21.2|41.6|10|3|0.07|4.5|1440|9.76|1|0|10|c. à soupe|pavot;graine de pavot;poppy seed;pavot graine||Ciqual 11061|
 Graines de courge|Fruits à coque et graines|618|5.4|29.5|49.1|6|1.4|0.02|8.7|46|8.82|1.9|0|10|c. à soupe|graine de courge;graines de courge;courge graine;pumpkin seed;pepita;pepitas;graines de citrouille||Ciqual 15064|
 """
-    // Produits laitiers
+    // Épices et herbes séchées
     private const val C10 = """
+Cannelle (poudre)|Épices et herbes séchées|243|27.5|4|1.2|53.1|2.2|0.03|0.3|1000|8.32|3.8|0|2.5|c. à café|cannelle;canelle;cannelle moulue;cannelle en poudre;cannelle poudre;cinnamon||Ciqual 11025|
+Curcuma (poudre)|Épices et herbes séchées|291|44.4|9.7|3.2|22.7|3.2|0.07|1.8|168|55|0.7|0|2.5|c. à café|curcuma;curcuma moulu;turmeric||Ciqual 11089|
+Graines de cumin|Épices et herbes séchées|427|33.7|17.8|22.3|10.5|2.2|0.42|1.5|931|66.4|7.7|0|2.5|c. à café|cumin;graine de cumin;cumin moulu||Ciqual 11042|
+Gingembre moulu|Épices et herbes séchées|335|58.3|9|4.2|14.1|3.4|0.07|2.6|114|19.8|0.7|0|2.5|c. à café|gingembre moulu;gingembre en poudre;gingembre poudre;gingembre seche||Ciqual 11006|
+Poivre noir|Épices et herbes séchées|331|39.9|13.3|7.5|25.3|0.6|0.04|2.9|480|17|0|0|2.5|c. à café|poivre;poivre noir;poivre moulu;black pepper||Ciqual 11015|
+Poivre blanc|Épices et herbes séchées|313|48.3|12.1|2.1|26.2||0.01|0.6|265|14.3|21|0|2.5|c. à café|poivre blanc;white pepper||Ciqual 11019|
+Paprika|Épices et herbes séchées|318|18.8|14.1|12.9|34.9|10.3|0.17|2.1|229|21.1|0.9|0|2.5|c. à café|paprika||Ciqual 11049|
+Piment de Cayenne (poudre)|Épices et herbes séchées|376|29.4|12|17.3|27.2|10.3|0.07|3.3|148|7.8|76.4|0|2.5|c. à café|cayenne;piment de cayenne;piment cayenne;piment moulu;piment en poudre||Ciqual 11088|
+Muscade|Épices et herbes séchées|506|27.4|5.8|36.3|20.8|3|0.04|25.9|184|3.04|3|0|2.5|c. à café|muscade;noix de muscade;nutmeg||Ciqual 11048|
+Clous de girofle|Épices et herbes séchées|335|31.6|6|13|33.9|2.4|0.69|4|632|11.8|0.2|0|2.5|c. à café|girofle;clou de girofle;clous de girofle;clove||Ciqual 11052|
+Cardamome (poudre)|Épices et herbes séchées|321|40.5|10.8|6.7|28||0.04||383|14|21|0|2.5|c. à café|cardamome;cardamom||Ciqual 11075|
+Graines de coriandre|Épices et herbes séchées|345|13|12.4|17.8|41.9||0.09|1|709|16.3|21|0|2.5|c. à café|coriandre graine;graines de coriandre;coriandre graines;coriandre moulu||Ciqual 11026|
+Curry (poudre)|Épices et herbes séchées|301|2.6|14.5|14|53.2|2.6|0.13|1.6|525|19.1|0.7|0|2.5|c. à café|curry en poudre;poudre de curry;curry poudre;epice curry||Ciqual 11005|
+Quatre-épices|Épices et herbes séchées|348|50.5|6.1|8.7|21.6||0.19|2.5|661|7.06|39.2|0|2.5|c. à café|quatre epices;quatre-epices||Ciqual 11056|
+Safran|Épices et herbes séchées|352|61.5|11.4|5.8|3.9|42.4|0.37|1.6|111|11.1|80.8|0|1|pincée|safran;saffron||Ciqual 11039|
+Laurier (feuille)|Épices et herbes séchées|353|48.6|7.6|8.4|26.3|48.6|0.06|2.3|834|43|46.5|0|2.5|c. à café|laurier;feuille de laurier;bay leaf||Ciqual 11053|
+Graines de carvi|Épices et herbes séchées|334|11.9|19.8|14.6|38|0.6|0.04|0.6|689|16.2|21|0|2.5|c. à café|carvi;graine de carvi||Ciqual 11064|
+Graines de fenouil|Épices et herbes séchées|327|12.5|15.8|14.9|39.8|12.5|0.22|0.5|1200|18.5|21|0|2.5|c. à café|graine de fenouil;graines de fenouil;fenouil graine||Ciqual 11066|
+Graines de fenugrec|Épices et herbes séchées|350|33.8|27.1|6.4|24.6|8.7|0.17|1.5|176|33.5|3|0|2.5|c. à café|fenugrec;graine de fenugrec||Ciqual 11077|
+Épices (moyenne)|Épices et herbes séchées|327|37.8|12.6|7.8|27.7|2.1|0.06|2.6|479|18|4.3|0.09|2.5|c. à café|epice;epices;epise;épice||Ciqual 11081|
+Extrait de vanille (alcoolique)|Épices et herbes séchées|240|2.4|0.1|0|0||0.01|||0.13|0|0|5|c. à café|vanille;extrait de vanille;vanille extrait||Ciqual 11065|32.9
+Extrait de vanille (aqueux)|Épices et herbes séchées|58|14.4|0|0|0|14.4|0.01|0|3|0.05|0|0|5|c. à café|extrait de vanille aqueux;vanille aqueuse||Ciqual 11098|
+Herbes de Provence|Épices et herbes séchées|283|23.1|11.5|7.2|40.1||0.09|1.9|1860|69.8|54|0|2.5|c. à café|herbes de provence;herbes provence;herbes||Ciqual 11060|
+Origan séché|Épices et herbes séchées|265|26.4|9|4.3|42.5|4.1|0.06|1.6|1600|36.8|2.3|0|2.5|c. à café|origan;origan seche;oregano||Ciqual 11035|
+Thym séché|Épices et herbes séchées|285|26.9|9.1|7.4|37|1.7|0.14|2.7|1890|124|50|0|2.5|c. à café|thym;thym seche||Ciqual 11038|
+Basilic séché|Épices et herbes séchées|244|10.1|23|4.1|37.7|1.7|0.19|2.2|2240|89.8|0.8|0|2.5|c. à café|basilic;basilic seche||Ciqual 11032|
+Romarin séché|Épices et herbes séchées|328|21.5|4.9|15.2|42.6||0.13|7.4|1280|29.3|61.2|0|2.5|c. à café|romarin;romarin seche||Ciqual 11036|
+Persil séché|Épices et herbes séchées|291|16.8|29|5.3|29.7|7.3|1.05|1.4|658|38|137|0|2.5|c. à café|persil seche;persil desseche||Ciqual 11024|
+Ail en poudre|Épices et herbes séchées|346|63.7|16.6|0.7|9|2.4|0.15|0.2|79|5.65|1.2|0|2.5|c. à café|ail en poudre;ail poudre;ail seche;ail moulu||Ciqual 11023|
+Menthe séchée|Épices et herbes séchées|283|22.2|19.9|6|29.8||0.86|1.6|1490|87.5|0|0|2.5|c. à café|menthe sechee;menthe seche||Ciqual 11029|
+Marjolaine séchée|Épices et herbes séchées|276|20.3|12.7|7|40.3|4.1|0.19|0.5|1990|82.7|51.4|0|2.5|c. à café|marjolaine;marjolaine sechee||Ciqual 11034|
+Sauge séchée|Épices et herbes séchées|320|20.4|10.6|12.8|40.3|1.7|0.03|7|1650|28.1|32.4|0|2.5|c. à café|sauge;sauge sechee||Ciqual 11037|
+Estragon séché|Épices et herbes séchées|342|42.8|22.8|7.2|7.4||0.16|1.9|1140|32.3|50|0|2.5|c. à café|estragon;estragon seche||Ciqual 11050|
+Aneth séché|Épices et herbes séchées|315|42.2|20|4.4|13.6||0.52|0.2|1780|48.8|50|0|2.5|c. à café|aneth seche;aneth seché||Ciqual 11063|
+Sarriette séchée|Épices et herbes séchées|264|23|6.7|5.9|45.7||0.06|3.3|2130|37.9|50|0|2.5|c. à café|sarriette;sarriette sechee||Ciqual 11062|
+Cerfeuil séché|Épices et herbes séchées|302|37.8|23.2|3.9|11.3||0.21|0.2|1350|32|50|0|2.5|c. à café|cerfeuil seche;cerfeuil seché||Ciqual 10999|
+"""
+    // Produits laitiers
+    private const val C11 = """
 Lait demi-écrémé|Produits laitiers|48|5|3.5|1.6|0|5|0.09|1|121|0|0|0|250|verre|lait demi-écrémé;lait;lait demi ecreme||Ciqual 19041|
 Lait entier|Produits laitiers|65|4.8|3.5|3.5|0|4.6|0.09|2.1|119|0|0|0.13|250|verre|lait entier||Ciqual 19023|
 Lait écrémé|Produits laitiers|34|5|3.6|0|0|4.7|0.09|0|119|0|0|0|250|verre|||Ciqual 19050|
@@ -384,7 +423,7 @@ Crème liquide 30%|Produits laitiers|293|3.7|2.2|30|0|2.9|0.07|18.6|75|0|2.4|0|1
 Crème chantilly|Produits laitiers|305|10.6|2.1|28.2|0|10.4|0.07|18.9|101|0.05|0|0.4|10|c. à soupe|chantilly||Ciqual 19420|
 """
     // Fromages
-    private const val C11 = """
+    private const val C12 = """
 Emmental|Fromages|373|0|27.9|28.8|0|0|0.61|19.7|978|0.15|0|0.78|30|portion|fromage (emmental);emmental;gruyere||Ciqual 12115|
 Emmental râpé|Fromages|368|0.6|27.6|28.2|0|0|0.68|18.1|977|0|0|0|10|c. à soupe|fromage rape||Ciqual 12118|
 Comté|Fromages|413|0|27.8|33.8|0|0|0.84|21.7|907|0.49|||30|portion|||Ciqual 12110|
@@ -407,7 +446,7 @@ Fromage fondu en tranche|Fromages|246|5.3|14.1|18.5|0|5|2.46|12.3|436|0.12||0|20
 Fromage affiné au lait cru (camembert lait cru)|Fromages|267|0|20.7|20.3|0|0|1.45|14.1|380|0.09||0|30|portion|fromage affiné au lait cru|F|Ciqual 12006|
 """
     // Matières grasses et sauces
-    private const val C12 = """
+    private const val C13 = """
 Beurre doux|Matières grasses et sauces|753|0.7|0.6|83|0|0.7|0.04|60|20|0|0|0|10|noisette|beurre||Ciqual 16400|
 Beurre demi-sel|Matières grasses et sauces|725|0.5|0.8|80|0|0.5|1.9|56.5|18|0.13|0|1.13|10|noisette|||Ciqual 16402|
 Margarine|Matières grasses et sauces|557|0.4|0.3|61.7|0|0.3|0.45|21.8|10|0.19|1|3.42|10|noisette|||Ciqual 16601|
@@ -433,7 +472,7 @@ Olives|Matières grasses et sauces|165|0.7|1.3|16.6|3.8|0|2.83|2.3|77|1.16|7.1|0
 Cornichons|Matières grasses et sauces|16|0.8|1.1|0|1.5|0.6|1.72|0|65|0.25|0|0|10|cornichon|||Ciqual 11004|
 """
     // Sucré
-    private const val C13 = """
+    private const val C14 = """
 Sucre blanc|Sucré|399|99.7|0|0|0|99.7|0.01|0|4|0.08|0|0|5|morceau|sucre;sucre en poudre||Ciqual 31016|
 Sucre roux / de canne|Sucré|393|98.1|0.1|0|0|97|0.07|0|83|0.71|0|0|5|c. à café|sucre de canne;cassonade;sucre roux||Ciqual 31017|
 Miel|Sucré|331|82.1|0.7|0|0|81.1|0.01|0|8|0.18|0.5|0|10|c. à café|||Ciqual 31008|
@@ -477,7 +516,7 @@ Glace bâtonnet enrobé chocolat|Sucré|329|33.3|3.3|20|1.2|27.8|0.17|14|94|3.22
 Glace à l'eau|Sucré|84|20.5|0.2|0.2|0.3|19.4|0.02|0.1|6|0.01|2.4|0|50|bâtonnet|||Ciqual 39526|
 """
     // Boissons
-    private const val C14 = """
+    private const val C15 = """
 Eau|Boissons|0|0|0|0|0|0|0.01|0|7|0.03|0|0|250|verre|eau du robinet||Ciqual 18066|
 Eau minérale|Boissons|0|0|0|0|0|0|0|0|19|0|0|0|250|verre|||Ciqual 18044|
 Soda cola|Boissons|40|10|0|0|0|10|0.01|0|2|0.11|0|0|330|canette|coca;cola;coca cola||Ciqual 18018|
@@ -518,7 +557,7 @@ Rhum|Boissons|234|0|0|0|0|0|0|0|0|0.12|0|0|40|verre (4 cl)|rhum agricole;rhum bl
 Whisky|Boissons|252|0.1|0|0|0|0.1|0|0|0|0.02|0|0|40|verre (4 cl)|||Ciqual 1005|36
 """
     // Plats et snacks courants
-    private const val C15 = """
+    private const val C16 = """
 Pizza|Plats et snacks courants|234|27.4|10|8.9|2.1|3.6|1.21|4.1|193|0.76|3.4|0.16|120|part|pizza||Ciqual 25516|
 Pizza margherita|Plats et snacks courants|224|29.6|8.6|7.4|2.3|3.4|1.14|3.1|239|1.2|5.5|0.1|120|part|||Ciqual 25404|
 Pizza royale (jambon, fromage, champignons)|Plats et snacks courants|208|25.9|9.5|6.9|2.2|3.4|1.23|3|155|0.7|4.8|0|120|part|||Ciqual 25548|
@@ -559,7 +598,7 @@ Beignet de viande ou poisson|Plats et snacks courants|238|10|18.7|13.5|0.4|0.9|0
 Pop-corn salé|Plats et snacks courants|477|50.2|8.3|24.6|10.6|2|2.61|11.9|10|2.3||0|30|portion|pop corn||Ciqual 9230|
 """
     // Fermentés et prébiotiques (suivi microbiote)
-    private const val C16 = """
+    private const val C17 = """
 Choucroute crue|Fermentés et prébiotiques (suivi microbiote)|20|3|1|0.1|||||||||100|portion|choucroute|F|valeur approximative (versions précédentes)|
 Kimchi|Fermentés et prébiotiques (suivi microbiote)|25|3.5|1.5|0.5|||||||||50|portion||F|valeur approximative (versions précédentes)|
 Miso|Fermentés et prébiotiques (suivi microbiote)|188|18.1|11.7|6|5.4|6.2|9.32|1.1|57|2.49|0|0|15|c. à soupe||F|Ciqual 20916|
@@ -567,5 +606,5 @@ Tempeh|Fermentés et prébiotiques (suivi microbiote)|157|7.9|16.1|4.7|6.2|0.2|0
 Banane peu mûre|Fermentés et prébiotiques (suivi microbiote)|90|20|1.1|0.3|||||||||120|banane|banane verte|P|valeur approximative (versions précédentes)|
 Chicorée soluble (poudre)|Fermentés et prébiotiques (suivi microbiote)|323|57.2|3.3|2.5|29.2|21.7|0.39|0.8|109|5.5|0|0|3|c. à café|chicoree|P|Ciqual 18152|
 """
-    val TSV: List<String> = listOf(C0, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16)
+    val TSV: List<String> = listOf(C0, C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12, C13, C14, C15, C16, C17)
 }

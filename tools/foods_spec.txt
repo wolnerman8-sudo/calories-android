@@ -266,10 +266,10 @@ R:1004:30,15006:15,19027:35,18041:20 | Punch coco | 60 | verre | |
 20299 | Asperges vertes cuites | 100 | portion | asperge;asperges | P
 20050 | Topinambour cuit | 150 | portion | topinambour | P
 20026 | Endive crue | 100 | endive | endive | 
-20028 | Fenouil cru | 100 | portion | | 
+20028 | Fenouil cru | 100 | portion | fenouil | 
 20022 | Cresson | 50 | portion | | 
-11014 | Persil frais | 5 | c. à soupe | | 
-11074 | Gingembre frais | 5 | morceau | | 
+11014 | Persil frais | 5 | c. à soupe | persil | 
+11074 | Gingembre frais | 5 | morceau | gingembre;gingembre frais | 
 20151 | Piment (cru) | 5 | piment | piment;bondamanpiment;piment antillais | 
 13004 | Avocat | 150 | avocat (chair) | avocat;zaboka | 
 25018 | Ratatouille | 200 | portion | | 
@@ -333,6 +333,45 @@ R:1004:30,15006:15,19027:35,18041:20 | Punch coco | 60 | verre | |
 15063 | Graines de chanvre (décortiquées) | 10 | c. à soupe | chanvre;chenevis;graine de chanvre;hemp seed;hemp;chanvre decortique | 
 11061 | Graines de pavot | 10 | c. à soupe | pavot;graine de pavot;poppy seed;pavot graine | 
 15064 | Graines de courge | 10 | c. à soupe | graine de courge;graines de courge;courge graine;pumpkin seed;pepita;pepitas;graines de citrouille | 
+## Épices et herbes séchées
+# v2.12 : valeurs Ciqual 2025 uniquement. Portion 2,5 g ≈ 1 c. à café (ordre de grandeur, pas une valeur Ciqual).
+# Pas de poudre de colombo ni de gousse de vanille dans Ciqual (gousse : composition absente).
+11025 | Cannelle (poudre) | 2.5 | c. à café | cannelle;canelle;cannelle moulue;cannelle en poudre;cannelle poudre;cinnamon | 
+11089 | Curcuma (poudre) | 2.5 | c. à café | curcuma;curcuma moulu;turmeric | 
+11042 | Graines de cumin | 2.5 | c. à café | cumin;graine de cumin;cumin moulu | 
+11006 | Gingembre moulu | 2.5 | c. à café | gingembre moulu;gingembre en poudre;gingembre poudre;gingembre seche | 
+11015 | Poivre noir | 2.5 | c. à café | poivre;poivre noir;poivre moulu;black pepper | 
+11019 | Poivre blanc | 2.5 | c. à café | poivre blanc;white pepper | 
+11049 | Paprika | 2.5 | c. à café | paprika | 
+11088 | Piment de Cayenne (poudre) | 2.5 | c. à café | cayenne;piment de cayenne;piment cayenne;piment moulu;piment en poudre | 
+11048 | Muscade | 2.5 | c. à café | muscade;noix de muscade;nutmeg | 
+11052 | Clous de girofle | 2.5 | c. à café | girofle;clou de girofle;clous de girofle;clove | 
+11075 | Cardamome (poudre) | 2.5 | c. à café | cardamome;cardamom | 
+11026 | Graines de coriandre | 2.5 | c. à café | coriandre graine;graines de coriandre;coriandre graines;coriandre moulu | 
+11005 | Curry (poudre) | 2.5 | c. à café | curry en poudre;poudre de curry;curry poudre;epice curry | 
+11056 | Quatre-épices | 2.5 | c. à café | quatre epices;quatre-epices | 
+11039 | Safran | 1 | pincée | safran;saffron | 
+11053 | Laurier (feuille) | 2.5 | c. à café | laurier;feuille de laurier;bay leaf | 
+11064 | Graines de carvi | 2.5 | c. à café | carvi;graine de carvi | 
+11066 | Graines de fenouil | 2.5 | c. à café | graine de fenouil;graines de fenouil;fenouil graine | 
+11077 | Graines de fenugrec | 2.5 | c. à café | fenugrec;graine de fenugrec | 
+11081 | Épices (moyenne) | 2.5 | c. à café | epice;epices;epise;épice | 
+11065 | Extrait de vanille (alcoolique) | 5 | c. à café | vanille;extrait de vanille;vanille extrait | 
+11098 | Extrait de vanille (aqueux) | 5 | c. à café | extrait de vanille aqueux;vanille aqueuse | 
+11060 | Herbes de Provence | 2.5 | c. à café | herbes de provence;herbes provence;herbes | 
+11035 | Origan séché | 2.5 | c. à café | origan;origan seche;oregano | 
+11038 | Thym séché | 2.5 | c. à café | thym;thym seche | 
+11032 | Basilic séché | 2.5 | c. à café | basilic;basilic seche | 
+11036 | Romarin séché | 2.5 | c. à café | romarin;romarin seche | 
+11024 | Persil séché | 2.5 | c. à café | persil seche;persil desseche | 
+11023 | Ail en poudre | 2.5 | c. à café | ail en poudre;ail poudre;ail seche;ail moulu | 
+11029 | Menthe séchée | 2.5 | c. à café | menthe sechee;menthe seche | 
+11034 | Marjolaine séchée | 2.5 | c. à café | marjolaine;marjolaine sechee | 
+11037 | Sauge séchée | 2.5 | c. à café | sauge;sauge sechee | 
+11050 | Estragon séché | 2.5 | c. à café | estragon;estragon seche | 
+11063 | Aneth séché | 2.5 | c. à café | aneth seche;aneth seché | 
+11062 | Sarriette séchée | 2.5 | c. à café | sarriette;sarriette sechee | 
+10999 | Cerfeuil séché | 2.5 | c. à café | cerfeuil seche;cerfeuil seché | 
 ## Produits laitiers
 19041 | Lait demi-écrémé | 250 | verre | lait demi-écrémé;lait;lait demi ecreme | 
 19023 | Lait entier | 250 | verre | lait entier | 

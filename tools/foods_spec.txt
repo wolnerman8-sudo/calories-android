@@ -322,6 +322,17 @@ R:1004:30,15006:15,19027:35,18041:20 | Punch coco | 60 | verre | |
 15004 | Noisettes | 1 | noisette | | 
 15044 | Pistaches | 0.7 | pistache | | 
 15202 | Beurre de cacahuète | 15 | c. à soupe | pate d arachide;beurre d arachide | 
+# v2.11 : graines courantes (valeurs Ciqual 2025 uniquement ; pas de lin doré distinct dans Ciqual)
+15034 | Graines de lin | 10 | c. à soupe | lin;graine de lin;graines lin;graines de lin;linseed;flaxseed;flax;lin dore;graines de lin dorees;golden flaxseed | 
+15052 | Graines de lin brunes | 10 | c. à soupe | lin brun;graine de lin brune;graines de lin brunes;flaxseed brown;brown flaxseed;linseed brown | 
+15010 | Graines de sésame | 10 | c. à soupe | sesame;graine de sesame;graines de sesame;sesame seed | 
+15035 | Graines de sésame décortiquées | 10 | c. à soupe | sesame decortique;graines de sesame decortiquees;husked sesame | 
+15011 | Graines de tournesol | 10 | c. à soupe | tournesol;graine de tournesol;sunflower seed;sunflower | 
+15045 | Graines de tournesol grillées salées | 10 | c. à soupe | tournesol grille;tournesol sale;sunflower roasted | 
+15047 | Graines de chia | 10 | c. à soupe | chia;graine de chia;chia seed;graines chia | 
+15063 | Graines de chanvre (décortiquées) | 10 | c. à soupe | chanvre;chenevis;graine de chanvre;hemp seed;hemp;chanvre decortique | 
+11061 | Graines de pavot | 10 | c. à soupe | pavot;graine de pavot;poppy seed;pavot graine | 
+15064 | Graines de courge | 10 | c. à soupe | graine de courge;graines de courge;courge graine;pumpkin seed;pepita;pepitas;graines de citrouille | 
 ## Produits laitiers
 19041 | Lait demi-écrémé | 250 | verre | lait demi-écrémé;lait;lait demi ecreme | 
 19023 | Lait entier | 250 | verre | lait entier | 

@@ -347,6 +347,16 @@ Noix (cerneaux)|Fruits à coque et graines|709|6.9|13.3|67.3|6.7|3|0|6.5|75|2.2|
 Noisettes|Fruits à coque et graines|632|7.2|14.4|56.9|11.6|4.9|0|4.8|120|3|0|0|1|noisette|||Ciqual 15004|
 Pistaches|Fruits à coque et graines|631|14.9|18.4|51.6|10.2|7.8|0.01|6.5|107|4.03|3|0|0.7|pistache|||Ciqual 15044|
 Beurre de cacahuète|Fruits à coque et graines|643|17.3|22.2|51.4|5|10.5|1.07|10.1|49|1.74|0|0|15|c. à soupe|pate d arachide;beurre d arachide||Ciqual 15202|
+Graines de lin|Fruits à coque et graines|528|6.5|19|40.3|24.4|1.6|0.1|4.3|223|6|0|0|10|c. à soupe|lin;graine de lin;graines lin;graines de lin;linseed;flaxseed;flax;lin dore;graines de lin dorees;golden flaxseed||Ciqual 15034|
+Graines de lin brunes|Fruits à coque et graines|533|3.6|18|42.2|26.9|1.4|0.1|4.6|210|5.7||0|10|c. à soupe|lin brun;graine de lin brune;graines de lin brunes;flaxseed brown;brown flaxseed;linseed brown||Ciqual 15052|
+Graines de sésame|Fruits à coque et graines|606|12.8|17.7|49.7|11.8|0.3|0|7|962|14.6|0|0|10|c. à soupe|sesame;graine de sesame;graines de sesame;sesame seed||Ciqual 15010|
+Graines de sésame décortiquées|Fruits à coque et graines|620|10.3|20.4|51|11.6|0.5|0.12|7.9|60|6.36|0|0|10|c. à soupe|sesame decortique;graines de sesame decortiquees;husked sesame||Ciqual 15035|
+Graines de tournesol|Fruits à coque et graines|653|10.1|21.3|55.5|6.4|2.6|0.02|6.2|78|4.9|1.4|0|10|c. à soupe|tournesol;graine de tournesol;sunflower seed;sunflower||Ciqual 15011|
+Graines de tournesol grillées salées|Fruits à coque et graines|626|12.7|21.2|51|8.3|3.3|2.63|2.2|70|5|1.4|0|10|c. à soupe|tournesol grille;tournesol sale;sunflower roasted||Ciqual 15045|
+Graines de chia|Fruits à coque et graines|454|7.7|16.5|30.7|34.4||0.04|3.3|631|7.72|1.6||10|c. à soupe|chia;graine de chia;chia seed;graines chia||Ciqual 15047|
+Graines de chanvre (décortiquées)|Fruits à coque et graines|617|5.4|30.8|48.8|4|1.5|0.01|4.6|70|7.95|0.5||10|c. à soupe|chanvre;chenevis;graine de chanvre;hemp seed;hemp;chanvre decortique||Ciqual 15063|
+Graines de pavot|Fruits à coque et graines|534|13.7|21.2|41.6|10|3|0.07|4.5|1440|9.76|1|0|10|c. à soupe|pavot;graine de pavot;poppy seed;pavot graine||Ciqual 11061|
+Graines de courge|Fruits à coque et graines|618|5.4|29.5|49.1|6|1.4|0.02|8.7|46|8.82|1.9|0|10|c. à soupe|graine de courge;graines de courge;courge graine;pumpkin seed;pepita;pepitas;graines de citrouille||Ciqual 15064|
 """
     // Produits laitiers
     private const val C10 = """

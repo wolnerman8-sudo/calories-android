@@ -135,8 +135,8 @@ fun Storage.loadProfile(): Profile = profilePrefs().let { p ->
 fun Storage.saveProfile(pr: Profile) {
     profilePrefs().edit().apply {
         if (pr.age != null) putInt("age", pr.age) else remove("age")
-        if (pr.weightKg != null) putFloat("weight", pr.weightKg.toFloat()) else remove("weight")
-        if (pr.heightCm != null) putFloat("height", pr.heightCm.toFloat()) else remove("height")
+        if (pr.weightKg != null) putFloat("weight", (Math.round(pr.weightKg * 10.0) / 10.0).toFloat()) else remove("weight")
+        if (pr.heightCm != null) putFloat("height", (Math.round(pr.heightCm * 10.0) / 10.0).toFloat()) else remove("height")
         if (pr.male != null) putBoolean("male", pr.male) else remove("male")
         putInt("activity", pr.activity)
     }.apply()

@@ -681,10 +681,9 @@ fun HistoryScreen(entries: List<Entry>, goal: Int, onDelete: (Entry) -> Unit) {
 @Composable
 fun ProfileScreen(storage: Storage, goal: Int, entries: List<Entry>, onUseGoal: (Int) -> Unit) {
     val initial = remember { storage.loadProfile() }
-    fun numTxt(d: Double?) = d?.let { if (it % 1.0 == 0.0) it.toInt().toString() else it.toString() } ?: ""
     var age by remember { mutableStateOf(initial.age?.toString() ?: "") }
-    var weight by remember { mutableStateOf(numTxt(initial.weightKg)) }
-    var height by remember { mutableStateOf(numTxt(initial.heightCm)) }
+    var weight by remember { mutableStateOf(ProfileFmt.numberOrEmpty(initial.weightKg)) }
+    var height by remember { mutableStateOf(ProfileFmt.numberOrEmpty(initial.heightCm)) }
     var male by remember { mutableStateOf(initial.male) }
     var activity by remember { mutableIntStateOf(initial.activity) }
     var actExpanded by remember { mutableStateOf(false) }
@@ -710,10 +709,10 @@ fun ProfileScreen(storage: Storage, goal: Int, entries: List<Entry>, onUseGoal: 
                         OutlinedTextField(age, { age = it.filter(Char::isDigit).take(3) }, label = { Text("Âge (ans)") },
                             singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f))
-                        OutlinedTextField(weight, { weight = it.take(6) }, label = { Text("Poids (kg)") },
+                        OutlinedTextField(weight, { weight = it.filter { c -> c.isDigit() || c == ',' || c == '.' }.take(6) }, label = { Text("Poids (kg)") },
                             singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.weight(1f))
-                        OutlinedTextField(height, { height = it.take(6) }, label = { Text("Taille (cm)") },
+                        OutlinedTextField(height, { height = it.filter { c -> c.isDigit() || c == ',' || c == '.' }.take(6) }, label = { Text("Taille (cm)") },
                             singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.weight(1f))
                     }
@@ -762,8 +761,8 @@ fun ProfileScreen(storage: Storage, goal: Int, entries: List<Entry>, onUseGoal: 
         }
         item { ReminderCard() }
         item { ExportCard(entries, goal) }
-        item { HealthConnectCard(entries) { kg -> weight = fmt(kg) } }
-        item { BodyScaleCard(profile.age) { kg -> weight = fmt(kg) } }
+        item { HealthConnectCard(entries) { kg -> weight = ProfileFmt.number(kg) } }
+        item { BodyScaleCard(profile.age) { kg -> weight = ProfileFmt.number(kg) } }
         item {
             // v2.6 : repères consultables à tout moment, avec la dernière masse grasse / musculaire connue
             val hist = BodyScaleManager.get(LocalContext.current).history

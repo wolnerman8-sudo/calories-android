@@ -81,6 +81,9 @@ class BodyScaleManager private constructor(private val ctx: Context) {
     var live by mutableStateOf<BodyReading?>(null); private set
     var deviceLabel by mutableStateOf<String?>(null); private set
     var saveMsg by mutableStateOf<String?>(null); private set
+    /** Incrémenté à chaque mise à jour auto du profil, pour rafraîchir le champ Poids. */
+    var profileSync by mutableStateOf(0 to 0.0); private set
+    var profileNotice by mutableStateOf<String?>(null); private set
     var needsHealthPermission by mutableStateOf(false); private set
     var lastSaved by mutableStateOf<WeighIn?>(null); private set
     var history by mutableStateOf(store.list()); private set
@@ -358,15 +361,25 @@ class BodyScaleManager private constructor(private val ctx: Context) {
         if (!store.add(w)) { saveMsg = "Déjà enregistré : ${WeighInRules.fmtKg(w.kg)} (même poids il y a moins de 2 min)."; return }
         history = store.list(); lastSaved = w
         addLog("Pesée enregistrée : ${w.kg} kg${if (auto) " (automatique)" else ""}")
-        saveMsg = "✓ ${WeighInRules.fmtKg(w.kg)} enregistré${if (auto) " automatiquement" else ""}. Santé Connect…"
+        // v2.13 : toute pesée enregistrée (auto ou bouton) met à jour le poids du profil, si elle est la plus récente et plausible
+        val earlier = history.filter { it.timeMs != w.timeMs }
+        val applied = ProfileWeight.fromWeighIn(w.kg, w.timeMs, earlier)
+        val profilTxt = if (applied != null) {
+            runCatching { val st = Storage(ctx); st.saveProfile(st.loadProfile().copy(weightKg = applied)) }
+            profileNotice = "Profil mis à jour : ${WeighInRules.fmtKg(applied)}"
+            profileSync = (profileSync.first + 1) to applied
+            addLog(profileNotice!!)
+            " ${profileNotice}."
+        } else { profileNotice = null; "" }
+        saveMsg = "✓ ${WeighInRules.fmtKg(w.kg)} enregistré${if (auto) " automatiquement" else ""}.${profilTxt} Santé Connect…"
         io.launch {
             val res = HealthSync.writeWeight(ctx, w.kg, Instant.ofEpochMilli(w.timeMs), deviceLabel ?: protocol)
             val (status, msg) = res.fold(
-                onSuccess = { if (it == HealthSync.WeightWrite.WRITTEN) "ok" to "✓ ${WeighInRules.fmtKg(w.kg)} enregistré et écrit dans Santé Connect."
-                              else "dup" to "✓ ${WeighInRules.fmtKg(w.kg)} enregistré (déjà présent dans Santé Connect)." },
+                onSuccess = { if (it == HealthSync.WeightWrite.WRITTEN) "ok" to "✓ ${WeighInRules.fmtKg(w.kg)} enregistré et écrit dans Santé Connect.${profilTxt}"
+                              else "dup" to "✓ ${WeighInRules.fmtKg(w.kg)} enregistré (déjà présent dans Santé Connect).${profilTxt}" },
                 onFailure = { e ->
                     needsHealthPermission = (e as? HealthSync.WeightError)?.needsPermission == true
-                    "err" to "✓ ${WeighInRules.fmtKg(w.kg)} enregistré dans Calories, mais pas dans Santé Connect : ${e.message ?: e.javaClass.simpleName}"
+                    "err" to "✓ ${WeighInRules.fmtKg(w.kg)} enregistré dans Calories, mais pas dans Santé Connect : ${e.message ?: e.javaClass.simpleName}${profilTxt}"
                 })
             if (status != "err") needsHealthPermission = false
             addLog("Santé Connect : $msg")

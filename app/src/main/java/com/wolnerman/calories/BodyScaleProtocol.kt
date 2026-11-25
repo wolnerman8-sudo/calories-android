@@ -363,3 +363,33 @@ object WeighInRules {
 
     fun fmtKg(kg: Double): String = String.format(Locale.FRENCH, "%.1f kg", kg)
 }
+
+/**
+ * v2.13 : nombres du profil (poids, taille) — au plus 1 décimale, virgule française, sans zéros inutiles
+ * (68,8 / 69). Accepte la virgule et le point à la lecture via [parseNum].
+ */
+object ProfileFmt {
+    fun number(d: Double): String {
+        val r = Math.round(d * 10.0) / 10.0
+        return if (r % 1.0 == 0.0) r.toLong().toString() else String.format(Locale.FRENCH, "%.1f", r)
+    }
+    fun numberOrEmpty(d: Double?) = d?.let { number(it) } ?: ""
+}
+
+/**
+ * v2.13 : dès qu'une pesée est enregistrée (auto ou bouton), le poids du profil est mis à jour
+ * (objectifs Mifflin et protéines). Uniquement la pesée la plus récente, et seulement si elle est
+ * entre 20 et 300 kg.
+ */
+object ProfileWeight {
+    const val MIN_KG = 20.0
+    const val MAX_KG = 300.0
+    fun plausible(kg: Double) = kg in MIN_KG..MAX_KG
+
+    /** Poids arrondi à 0,1 kg à écrire dans le profil, ou null si la pesée doit être ignorée. */
+    fun fromWeighIn(kg: Double, timeMs: Long, existing: List<WeighIn>): Double? {
+        if (!plausible(kg)) return null
+        if (existing.any { it.timeMs > timeMs }) return null
+        return Math.round(kg * 10.0) / 10.0
+    }
+}

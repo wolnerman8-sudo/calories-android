@@ -50,6 +50,11 @@ fun BodyScaleCard(age: Int?, onUseWeight: (Double) -> Unit) {
     var permMsg by remember { mutableStateOf<String?>(null) }
     val df = remember { SimpleDateFormat("EEE d MMM HH:mm", Locale.FRENCH) }
     LaunchedEffect(debug) { mgr.logAll = debug }
+    // v2.13 : une pesée enregistrée pendant que cet écran est ouvert → rafraîchir le champ Poids
+    val syncAtOpen = remember { mgr.profileSync.first }
+    LaunchedEffect(mgr.profileSync.first) {
+        if (mgr.profileSync.first > syncAtOpen) onUseWeight(mgr.profileSync.second)
+    }
 
     val enableBt = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (mgr.isBluetoothOn()) mgr.startScan() else permMsg = "Le Bluetooth doit être activé pour lire la balance."
@@ -109,6 +114,9 @@ fun BodyScaleCard(age: Int?, onUseWeight: (Double) -> Unit) {
                 Text("Enregistrer automatiquement quand le poids est stable", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                 Switch(auto, { auto = it; mgr.store.autoSave = it })
             }
+            Text("Chaque pesée enregistrée (automatique ou non) met aussi à jour le poids du profil, pour recalculer les objectifs kcal et protéines.",
+                style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            mgr.profileNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = Color(0xFF2E7D32)) }
 
             (permMsg ?: mgr.message)?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall,

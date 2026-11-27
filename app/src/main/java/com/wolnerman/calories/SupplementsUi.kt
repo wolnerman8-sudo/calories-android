@@ -5,7 +5,13 @@ import android.app.TimePickerDialog
 import android.content.Context
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -18,6 +24,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -85,6 +92,7 @@ fun SupplementsTodayCard(todayIso: String) {
     var managing by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Supplement?>(null) }
     var scanMessage by remember { mutableStateOf<String?>(null) }
+    var capturePhotoOnOpen by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<Supplement?>(null) }
     var info by remember { mutableStateOf<String?>(null) }
     var scanning by remember { mutableStateOf(false) }
@@ -136,15 +144,20 @@ fun SupplementsTodayCard(todayIso: String) {
                     enabled = !scanning,
                     modifier = Modifier.weight(1f),
                 ) { Text(if (scanning) "Recherche…" else "📷 Scanner") }
+                OutlinedButton(
+                    onClick = { editing = Supplement(0L, ""); scanMessage = null; capturePhotoOnOpen = true },
+                    enabled = !scanning,
+                    modifier = Modifier.weight(1f),
+                ) { Text("📷 Photo") }
                 Button(
-                    onClick = { editing = Supplement(0L, ""); scanMessage = null },
+                    onClick = { editing = Supplement(0L, ""); scanMessage = null; capturePhotoOnOpen = false },
                     enabled = !scanning,
                     modifier = Modifier.weight(1f),
                 ) { Text("+ Ajouter") }
             }
 
             if (items.isEmpty()) {
-                Text("Aucun complément enregistré (Vitamine D, Oméga-3, Magnésium…). Scanne le code-barres ou ajoute-les ici pour les cocher chaque jour.",
+                Text("Aucun complément ou cosmétique enregistré (Vitamine D, Oméga-3, Magnésium…). Scanne le code-barres, prends une photo ou ajoute-les ici pour les cocher chaque jour.",
                     style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             } else {
                 items.forEach { s ->
@@ -161,6 +174,7 @@ fun SupplementsTodayCard(todayIso: String) {
                             checked = checked,
                             onCheckedChange = { Supplements.setTaken(ctx, todayIso, s.id, it) },
                         )
+                        s.photo?.takeIf { java.io.File(it).exists() }?.let { Thumbnail(it, 48) }
                         Column(Modifier.weight(1f)) {
                             Text(
                                 s.name,
@@ -206,12 +220,15 @@ fun SupplementsTodayCard(todayIso: String) {
         SupplementEditDialog(
             initial = current,
             scanMessage = scanMessage,
-            onDismiss = { editing = null; scanMessage = null },
+            takePhotoOnStart = capturePhotoOnOpen,
+            onDismiss = { editing = null; scanMessage = null; capturePhotoOnOpen = false },
             onSave = { saved ->
                 val final = if (saved.id <= 0L) saved.copy(id = SupplementLogic.nextId(Supplements.items)) else saved
-                Supplements.saveSupplement(ctx, final)
-                editing = null
-                scanMessage = null
+                if (Supplements.saveSupplement(ctx, final)) {
+                    editing = null
+                    scanMessage = null
+                    capturePhotoOnOpen = false
+                }
             },
         )
     }
@@ -264,6 +281,7 @@ fun SupplementsManageCard() {
                 items.forEach { s ->
                     val sub = supplementSubtitle(s)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        s.photo?.takeIf { java.io.File(it).exists() }?.let { Thumbnail(it, 48) }
                         Column(Modifier.weight(1f)) {
                             Text(s.name, fontWeight = FontWeight.SemiBold)
                             if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
@@ -308,9 +326,10 @@ fun SupplementsManageCard() {
             onDismiss = { editing = null; scanMessage = null },
             onSave = { saved ->
                 val final = if (saved.id <= 0L) saved.copy(id = SupplementLogic.nextId(Supplements.items)) else saved
-                Supplements.saveSupplement(ctx, final)
-                editing = null
-                scanMessage = null
+                if (Supplements.saveSupplement(ctx, final)) {
+                    editing = null
+                    scanMessage = null
+                }
             },
         )
     }
@@ -342,35 +361,42 @@ private fun SupplementDeleteDialog(supplement: Supplement, onDismiss: () -> Unit
 private fun SupplementEditDialog(
     initial: Supplement,
     scanMessage: String? = null,
+    takePhotoOnStart: Boolean = false,
     onDismiss: () -> Unit,
     onSave: (Supplement) -> Unit,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var name by remember(initial.id, initial.barcode, initial.name) { mutableStateOf(initial.name) }
-    var dose by remember(initial.id, initial.barcode, initial.dose) { mutableStateOf(initial.dose) }
-    var hour by remember { mutableStateOf(initial.hour) }
-    var minute by remember { mutableStateOf(initial.minute) }
-    var reminderEnabled by remember { mutableStateOf(initial.reminderEnabled) }
-    var kcalText by remember(initial.id, initial.barcode, initial.kcal) { mutableStateOf(initial.kcal?.toString() ?: "") }
+    // Clés stables (id + code-barres) : ne pas inclure le nom/la dose, sinon une recomposition
+    // avec un initial encore vide réinitialise ce que l'utilisateur vient de taper.
+    val formKey = "${initial.id}|${initial.barcode.orEmpty()}"
+    var name by remember(formKey) { mutableStateOf(initial.name) }
+    var dose by remember(formKey) { mutableStateOf(initial.dose) }
+    var hour by remember(formKey) { mutableStateOf(initial.hour) }
+    var minute by remember(formKey) { mutableStateOf(initial.minute) }
+    var reminderEnabled by remember(formKey) { mutableStateOf(initial.reminderEnabled) }
+    var kcalText by remember(formKey) { mutableStateOf(initial.kcal?.toString() ?: "") }
     val initInGrams = initial.omega3Mg != null && initial.omega3Mg >= 1000.0 && initial.omega3Mg % 1000.0 == 0.0
-    var omegaInGrams by remember { mutableStateOf(initInGrams) }
-    var omegaText by remember(initial.id, initial.barcode, initial.omega3Mg) {
-        mutableStateOf(
-            initial.omega3Mg?.let { fmt(if (initInGrams) it / 1000.0 else it) } ?: "",
-        )
+    var omegaInGrams by remember(formKey) { mutableStateOf(initInGrams) }
+    var omegaText by remember(formKey) {
+        mutableStateOf(initial.omega3Mg?.let { fmt(if (initInGrams) it / 1000.0 else it) } ?: "")
     }
-    var barcode by remember(initial.id, initial.barcode) { mutableStateOf(initial.barcode.orEmpty()) }
-    var testMsg by remember { mutableStateOf(scanMessage) }
-    var scanning by remember { mutableStateOf(false) }
+    var barcode by remember(formKey) { mutableStateOf(initial.barcode.orEmpty()) }
+    var photoPath by remember(formKey) { mutableStateOf(initial.photo) }
+    var testMsg by remember(formKey) { mutableStateOf(scanMessage) }
+    var scanning by remember(formKey) { mutableStateOf(false) }
+    var photoBusy by remember { mutableStateOf(false) }
+    var pendingCameraPath by rememberSaveable { mutableStateOf<String?>(null) }
+    var startedPhoto by remember(formKey) { mutableStateOf(false) }
 
-    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (!ok) {
-            reminderEnabled = false
-            testMsg = "Autorise les notifications dans les réglages Android pour activer le rappel."
-        }
+    val canSave = SupplementFormLogic.canSave(name)
+    val blockedReason = SupplementFormLogic.blockedReason(name)
+
+    fun discardUnsavedPhoto() {
+        val path = photoPath
+        if (path != null && path != initial.photo) Photos.delete(path)
     }
-    fun needsPerm() = Build.VERSION.SDK_INT >= 33 && !ReminderScheduler.canNotify(ctx)
+    fun close() { discardUnsavedPhoto(); onDismiss() }
 
     fun applyDraft(draft: ScannedSupplementDraft) {
         barcode = draft.barcode
@@ -389,146 +415,226 @@ private fun SupplementEditDialog(
         }
     }
 
-    fun buildCandidate(): Supplement = Supplement(
-        id = if (initial.id > 0L) initial.id else 1L,
-        name = name.trim(),
-        dose = dose.trim(),
+    fun setPhoto(newPath: String?) {
+        val old = photoPath
+        if (old != null && old != newPath && old != initial.photo) Photos.delete(old)
+        photoPath = newPath
+    }
+
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val f = pendingCameraPath?.let { File(it) }; pendingCameraPath = null
+        if (f == null) return@rememberLauncherForActivityResult
+        if (!ok || !f.exists() || f.length() == 0L) { f.delete(); return@rememberLauncherForActivityResult }
+        photoBusy = true
+        scope.launch {
+            val good = withContext(Dispatchers.IO) { Photos.compress(f, Photos.SUPPLEMENT_MAX_SIDE) }
+            if (good) setPhoto(f.absolutePath) else { f.delete(); testMsg = "Impossible d'enregistrer la photo." }
+            photoBusy = false
+        }
+    }
+    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        photoBusy = true
+        scope.launch {
+            val f = withContext(Dispatchers.IO) {
+                Photos.importFromUri(ctx, uri, "compl_")?.also { Photos.compress(it, Photos.SUPPLEMENT_MAX_SIDE) }
+            }
+            if (f != null) setPhoto(f.absolutePath) else testMsg = "Impossible d'importer cette image."
+            photoBusy = false
+        }
+    }
+    fun launchCamera() {
+        val f = Photos.newSupplementFile(ctx)
+        pendingCameraPath = f.absolutePath
+        takePicture.launch(Photos.uriFor(ctx, f))
+    }
+
+    LaunchedEffect(takePhotoOnStart, formKey) {
+        if (takePhotoOnStart && !startedPhoto) {
+            startedPhoto = true
+            launchCamera()
+        }
+    }
+
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (!ok) {
+            reminderEnabled = false
+            testMsg = "Autorise les notifications dans les réglages Android pour activer le rappel."
+        }
+    }
+    fun needsPerm() = Build.VERSION.SDK_INT >= 33 && !ReminderScheduler.canNotify(ctx)
+
+    fun buildCandidate(): Supplement? = SupplementFormLogic.fromForm(
+        id = initial.id,
+        name = name,
+        dose = dose,
         hour = hour,
         minute = minute,
         reminderEnabled = reminderEnabled,
-        kcal = kcalText.trim().toIntOrNull()?.takeIf { it >= 0 },
-        omega3Mg = SupplementLogic.parseOmega3ToMg(omegaText, omegaInGrams),
+        kcalText = kcalText,
+        omegaText = omegaText,
+        omegaInGrams = omegaInGrams,
         createdDate = initial.createdDate,
         barcode = barcode.trim().ifBlank { null },
+        photo = photoPath,
     )
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (initial.id <= 0L) "Nouveau complément" else "Modifier le complément") },
-        text = {
-            Column(
-                Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = {
-                        startSupplementBarcodeScan(ctx, onCode = { code ->
-                            scanning = true
-                            testMsg = "Recherche du produit…"
-                            scope.launch {
-                                val draft = SupplementScanLogic.lookup(code)
-                                applyDraft(draft)
-                                scanning = false
-                            }
-                        }, onError = { testMsg = it })
-                    },
-                    enabled = !scanning,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (scanning) "Recherche…" else "📷 Scanner le code-barres") }
+    fun trySave() {
+        val candidate = buildCandidate()
+        if (candidate == null) {
+            testMsg = SupplementFormLogic.NAME_REQUIRED
+            return
+        }
+        onSave(candidate)
+    }
 
-                if (barcode.isNotBlank()) {
-                    Text("Code-barres : $barcode", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                }
-
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Nom (ex. Vitamine D, Oméga-3…)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+    Dialog(onDismissRequest = { close() }, properties = DialogProperties(usePlatformDefaultWidth = true)) {
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    if (initial.id <= 0L) "Nouveau complément" else "Modifier le complément",
+                    style = MaterialTheme.typography.titleMedium,
                 )
-                OutlinedTextField(
-                    value = dose,
-                    onValueChange = { dose = it },
-                    label = { Text("Dose (ex. 1 gélule, 1000 UI, 500 mg)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                Text("Heure de prise (facultatif)", style = MaterialTheme.typography.labelLarge)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = {
-                        val h0 = hour ?: SupplementLogic.DEFAULT_HOUR
-                        val m0 = minute ?: SupplementLogic.DEFAULT_MINUTE
-                        TimePickerDialog(ctx, { _, h, m -> hour = h; minute = m }, h0, m0, true).show()
-                    }) {
-                        Text(if (hour != null && minute != null) ReminderLogic.timeLabel(hour!!, minute!!) else "Choisir une heure")
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 460.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                startSupplementBarcodeScan(ctx, onCode = { code ->
+                                    scanning = true
+                                    testMsg = "Recherche du produit…"
+                                    scope.launch {
+                                        val draft = SupplementScanLogic.lookup(code)
+                                        applyDraft(draft)
+                                        scanning = false
+                                    }
+                                }, onError = { testMsg = it })
+                            },
+                            enabled = !scanning && !photoBusy,
+                            modifier = Modifier.weight(1f),
+                        ) { Text(if (scanning) "Recherche…" else "📷 Scanner") }
+                        OutlinedButton(
+                            onClick = { launchCamera() },
+                            enabled = !scanning && !photoBusy,
+                            modifier = Modifier.weight(1f),
+                        ) { Text(if (photoBusy) "Photo…" else "📷 Photo") }
                     }
-                    if (hour != null) {
-                        IconButton(onClick = { hour = null; minute = null; reminderEnabled = false }) {
-                            Icon(Icons.Filled.Clear, contentDescription = "Effacer l'heure")
+                    TextButton(
+                        onClick = { pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        enabled = !scanning && !photoBusy,
+                    ) { Text("Choisir dans la galerie") }
+                    Text("Compléments et cosmétiques : tu peux scanner le code-barres, photographier l'étiquette, ou tout saisir à la main.",
+                        style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+
+                    if (barcode.isNotBlank()) {
+                        Text("Code-barres : $barcode", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
+                    photoPath?.takeIf { File(it).exists() }?.let { path ->
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Thumbnail(path, 88)
+                            TextButton(onClick = { setPhoto(null) }) { Text("Retirer la photo") }
                         }
                     }
-                }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Rappel sonore à cette heure", Modifier.weight(1f))
-                    Switch(
-                        checked = reminderEnabled,
-                        onCheckedChange = { on ->
-                            if (on) {
-                                if (hour == null) {
-                                    hour = SupplementLogic.DEFAULT_HOUR
-                                    minute = SupplementLogic.DEFAULT_MINUTE
-                                }
-                                reminderEnabled = true
-                                if (needsPerm()) permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            } else {
-                                reminderEnabled = false
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Nom (ex. Vitamine D, Oméga-3…)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = dose,
+                        onValueChange = { dose = it },
+                        label = { Text("Dose (facultatif, ex. 1 gélule, 1000 UI)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Text("Heure de prise (facultatif)", style = MaterialTheme.typography.labelLarge)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = {
+                            val h0 = hour ?: SupplementLogic.DEFAULT_HOUR
+                            val m0 = minute ?: SupplementLogic.DEFAULT_MINUTE
+                            TimePickerDialog(ctx, { _, h, m -> hour = h; minute = m }, h0, m0, true).show()
+                        }) {
+                            Text(if (hour != null && minute != null) ReminderLogic.timeLabel(hour!!, minute!!) else "Choisir une heure")
+                        }
+                        if (hour != null) {
+                            IconButton(onClick = { hour = null; minute = null; reminderEnabled = false }) {
+                                Icon(Icons.Filled.Clear, contentDescription = "Effacer l'heure")
                             }
-                        },
-                    )
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Rappel sonore à cette heure", Modifier.weight(1f))
+                        Switch(
+                            checked = reminderEnabled,
+                            onCheckedChange = { on ->
+                                if (on) {
+                                    if (hour == null) {
+                                        hour = SupplementLogic.DEFAULT_HOUR
+                                        minute = SupplementLogic.DEFAULT_MINUTE
+                                    }
+                                    reminderEnabled = true
+                                    if (needsPerm()) permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    reminderEnabled = false
+                                }
+                            },
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = kcalText,
+                            onValueChange = { kcalText = it.filter { c -> c.isDigit() || c == ',' || c == '.' }.take(5) },
+                            label = { Text("kcal / prise") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            value = omegaText,
+                            onValueChange = { omegaText = it.filter { c -> c.isDigit() || c == ',' || c == '.' }.take(7) },
+                            label = { Text("Oméga-3 EPA+DHA") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Unité oméga-3 :", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        FilterChip(selected = !omegaInGrams, onClick = { omegaInGrams = false }, label = { Text("mg") })
+                        FilterChip(selected = omegaInGrams, onClick = { omegaInGrams = true }, label = { Text("g") })
+                    }
+
+                    if (name.isNotBlank()) {
+                        OutlinedButton(onClick = {
+                            val preview = buildCandidate() ?: return@OutlinedButton
+                            testMsg = if (SupplementScheduler.show(ctx, preview))
+                                "Notification de test envoyée (« ${SupplementLogic.notificationTitle(preview)} »)."
+                            else "Notifications bloquées : autorise-les dans les réglages Android."
+                        }) { Text("Tester la notification") }
+                    }
+                    testMsg?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Color.Gray) }
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = kcalText,
-                        onValueChange = { kcalText = it.filter(Char::isDigit).take(4) },
-                        label = { Text("kcal / prise") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f),
-                    )
-                    OutlinedTextField(
-                        value = omegaText,
-                        onValueChange = { omegaText = it.filter { c -> c.isDigit() || c == ',' || c == '.' }.take(7) },
-                        label = { Text("Oméga-3 EPA+DHA") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.weight(1f),
-                    )
+                if (!canSave) {
+                    Text(blockedReason ?: SupplementFormLogic.NAME_REQUIRED,
+                        style = MaterialTheme.typography.bodySmall, color = Color(0xFFC62828))
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Unité oméga-3 :", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                    FilterChip(
-                        selected = !omegaInGrams,
-                        onClick = { omegaInGrams = false },
-                        label = { Text("mg") },
-                    )
-                    FilterChip(
-                        selected = omegaInGrams,
-                        onClick = { omegaInGrams = true },
-                        label = { Text("g") },
-                    )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { close() }) { Text("Annuler") }
+                    Button(onClick = { trySave() }, enabled = canSave) { Text("Enregistrer") }
                 }
-
-                if (name.isNotBlank()) {
-                    OutlinedButton(onClick = {
-                        val preview = buildCandidate()
-                        testMsg = if (SupplementScheduler.show(ctx, preview))
-                            "Notification de test envoyée (« ${SupplementLogic.notificationTitle(preview)} »)."
-                        else "Notifications bloquées : autorise-les dans les réglages Android."
-                    }) { Text("Tester la notification") }
-                }
-                testMsg?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Color.Gray) }
             }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = name.isNotBlank(),
-                onClick = { onSave(buildCandidate().copy(id = initial.id)) },
-            ) { Text("Enregistrer") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
-    )
+        }
+    }
 }

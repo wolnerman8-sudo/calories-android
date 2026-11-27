@@ -15,31 +15,34 @@ import kotlin.math.roundToInt
 /** Photos de repas stockées dans le stockage privé de l'appli (filesDir/photos), sans permission. */
 object Photos {
     private const val MAX_SIDE = 1280
+    const val SUPPLEMENT_MAX_SIDE = 1024
     private const val QUALITY = 80
 
     private fun dir(context: Context) = File(context.filesDir, "photos").apply { mkdirs() }
 
-    fun newFile(context: Context): File = File(dir(context), "repas_${System.currentTimeMillis()}.jpg")
+    fun newFile(context: Context, prefix: String = "repas_"): File =
+        File(dir(context), prefix + System.currentTimeMillis() + ".jpg")
+    fun newSupplementFile(context: Context): File = newFile(context, "compl_")
 
     fun uriFor(context: Context, file: File): Uri =
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 
     /** Copie une image choisie dans la galerie vers le stockage privé, puis la compresse. */
-    fun importFromUri(context: Context, uri: Uri): File? = try {
-        val f = newFile(context)
+    fun importFromUri(context: Context, uri: Uri, prefix: String = "repas_"): File? = try {
+        val f = newFile(context, prefix)
         context.contentResolver.openInputStream(uri)?.use { input -> f.outputStream().use { input.copyTo(it) } }
         if (f.length() > 0 && compress(f)) f else { f.delete(); null }
     } catch (e: Exception) { null }
 
     /** Redimensionne (côté max 1280 px), corrige la rotation EXIF et réenregistre en JPEG 80 %. */
-    fun compress(file: File): Boolean = try {
+    fun compress(file: File, maxSide: Int = MAX_SIDE): Boolean = try {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, bounds)
         if (bounds.outWidth <= 0) false else {
             var sample = 1
-            while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= MAX_SIDE) sample *= 2
+            while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
             var bmp = BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })!!
-            val scale = MAX_SIDE.toFloat() / max(bmp.width, bmp.height)
+            val scale = maxSide.toFloat() / max(bmp.width, bmp.height)
             val rotation = when (ExifInterface(file.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
                 ExifInterface.ORIENTATION_ROTATE_90 -> 90f
                 ExifInterface.ORIENTATION_ROTATE_180 -> 180f

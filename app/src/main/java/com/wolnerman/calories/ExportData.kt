@@ -73,7 +73,7 @@ object ExportData {
         }
     }
 
-    val SUPP_HEADER = listOf("Date", "Complément", "Dose", "Heure prévue", "Pris", "kcal", "Oméga-3 (mg)", "Code-barres")
+    val SUPP_HEADER = listOf("Date", "Complément", "Dose", "Heure prévue", "Pris", "kcal", "Oméga-3 (mg)", "Code-barres", "Photo")
 
     /** Historique des compléments alimentaires (prises et oublis par jour journalisé). */
     fun supplementsCsv(
@@ -94,6 +94,7 @@ object ExportData {
                     s.kcal?.takeIf { it > 0 }?.toString() ?: "",
                     s.omega3Mg?.takeIf { it > 0.0 }?.let { num(it) } ?: "",
                     s.barcode ?: "",
+                    if (!s.photo.isNullOrBlank()) "oui" else "non",
                 ))
             }
         }

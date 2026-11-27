@@ -16,6 +16,7 @@ data class Supplement(
     val omega3Mg: Double? = null,
     val createdDate: String = "",
     val barcode: String? = null,
+    val photo: String? = null,
 )
 
 /** Logique pure des compléments alimentaires et du suivi quotidien (testable sans Android). */
@@ -38,6 +39,7 @@ object SupplementLogic {
         kcal = s.kcal?.takeIf { it >= 0 },
         omega3Mg = s.omega3Mg?.takeIf { !it.isNaN() && it >= 0.0 },
         barcode = SupplementScanLogic.normalizeBarcode(s.barcode ?: ""),
+        photo = s.photo?.trim()?.takeIf { it.isNotEmpty() },
     )
 
     fun upsert(list: List<Supplement>, s: Supplement): List<Supplement> {
@@ -141,6 +143,7 @@ object SupplementLogic {
                 s.omega3Mg?.let { put("o3", it) }
                 if (s.createdDate.isNotBlank()) put("cd", s.createdDate)
                 s.barcode?.let { put("bc", it) }
+                s.photo?.let { put("ph", it) }
             })
         }
     }.toString()
@@ -162,6 +165,7 @@ object SupplementLogic {
                 omega3Mg = if (o.has("o3") && !o.isNull("o3")) o.optDouble("o3").takeIf { !it.isNaN() } else null,
                 createdDate = o.optString("cd", ""),
                 barcode = o.optString("bc", "").ifBlank { null },
+                photo = o.optString("ph", "").ifBlank { null },
             )
         }
     }.getOrDefault(emptyList())
@@ -182,4 +186,56 @@ object SupplementLogic {
         }
         out
     }.getOrDefault(emptyMap())
+}
+
+
+/** Validation du formulaire d'ajout / édition (testable sans Android). */
+object SupplementFormLogic {
+    const val NAME_REQUIRED = "Saisis au moins un nom pour enregistrer."
+
+    fun canSave(name: String): Boolean = name.trim().isNotEmpty()
+    fun blockedReason(name: String): String? = if (canSave(name)) null else NAME_REQUIRED
+
+    /** kcal facultatif : vide ou invalide = ignoré, sans bloquer l'enregistrement. */
+    fun parseKcal(raw: String): Int? =
+        raw.trim().replace(',', '.').toDoubleOrNull()?.let { kotlin.math.round(it).toInt() }?.takeIf { it >= 0 }
+
+    /**
+     * Prépare le complément à enregistrer. Null seulement si le nom est vide.
+     * Dose, heure, rappel, kcal, oméga-3, code-barres et photo restent facultatifs.
+     * Un rappel sans heure est enregistré mais désactivé (sanitize). L'alarme exacte n'est pas requise.
+     */
+    fun prepared(s: Supplement): Supplement? {
+        val clean = SupplementLogic.sanitize(s)
+        return clean.takeIf { it.name.isNotEmpty() }
+    }
+
+    fun fromForm(
+        id: Long,
+        name: String,
+        dose: String = "",
+        hour: Int? = null,
+        minute: Int? = null,
+        reminderEnabled: Boolean = false,
+        kcalText: String = "",
+        omegaText: String = "",
+        omegaInGrams: Boolean = false,
+        createdDate: String = "",
+        barcode: String? = null,
+        photo: String? = null,
+    ): Supplement? = prepared(
+        Supplement(
+            id = id,
+            name = name,
+            dose = dose,
+            hour = hour,
+            minute = minute,
+            reminderEnabled = reminderEnabled,
+            kcal = parseKcal(kcalText),
+            omega3Mg = SupplementLogic.parseOmega3ToMg(omegaText, omegaInGrams),
+            createdDate = createdDate,
+            barcode = barcode,
+            photo = photo,
+        )
+    )
 }

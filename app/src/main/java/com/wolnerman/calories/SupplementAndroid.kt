@@ -41,18 +41,25 @@ object Supplements {
     fun reloadIfInitialized(ctx: Context) = init(ctx)
 
     @Synchronized
-    fun saveSupplement(ctx: Context, s: Supplement) {
-        val withDate = if (s.createdDate.isBlank()) s.copy(createdDate = LocalDate.now().toString()) else s
+    fun saveSupplement(ctx: Context, s: Supplement): Boolean {
+        val prepared = SupplementFormLogic.prepared(s) ?: return false
+        val withDate = if (prepared.createdDate.isBlank()) prepared.copy(createdDate = LocalDate.now().toString()) else prepared
+        val previous = items.firstOrNull { it.id == withDate.id }
         val next = SupplementLogic.upsert(items, withDate)
         items = next
         prefs(ctx).edit().putString("list", SupplementLogic.listToJson(next)).apply()
-        SupplementScheduler.scheduleAll(ctx)
+        if (previous?.photo != null && previous.photo != withDate.photo) Photos.delete(previous.photo)
+        // Une alarme exacte non autorisée ne doit pas empêcher l'enregistrement.
+        runCatching { SupplementScheduler.scheduleAll(ctx) }
+        return true
     }
 
     @Synchronized
     fun deleteSupplement(ctx: Context, id: Long) {
+        val oldPhoto = items.firstOrNull { it.id == id }?.photo
         val nextItems = SupplementLogic.delete(items, id)
         val nextLogs = SupplementLogic.purgeFromLogs(logs, id)
+        Photos.delete(oldPhoto)
         items = nextItems
         logs = nextLogs
         prefs(ctx).edit()

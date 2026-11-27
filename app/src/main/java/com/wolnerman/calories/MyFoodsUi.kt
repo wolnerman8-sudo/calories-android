@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 
 /** v2.8 : carte « Mes aliments » (Profil) : aliments hors liste mémorisés, modifiables et supprimables. */
 @Composable
-fun MyFoodsCard() {
+fun MyFoodsCard(onOpenRecipe: (CustomFood?) -> Unit = {}) {
     val items = MyFoods.items
     var editing by remember { mutableStateOf<CustomFood?>(null) }
     var deleting by remember { mutableStateOf<CustomFood?>(null) }
@@ -30,15 +30,19 @@ fun MyFoodsCard() {
             (if (showAll) items else items.take(8)).forEach { c ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(c.name, fontWeight = FontWeight.SemiBold)
+                        Text((if (MyFoodsLogic.isRecipe(c)) "🍽 " else "") + c.name, fontWeight = FontWeight.SemiBold)
                         Text(foodLine(MyFoodsLogic.toFood(c)), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        if (MyFoodsLogic.isRecipe(c)) TextButton(onClick = { onOpenRecipe(c) }) { Text("Modifier la recette") }
                     }
                     IconButton(onClick = { editing = c }) { Icon(Icons.Filled.Edit, contentDescription = "Modifier") }
                     IconButton(onClick = { deleting = c }) { Icon(Icons.Filled.Delete, contentDescription = "Supprimer") }
                 }
             }
             if (items.size > 8) TextButton(onClick = { showAll = !showAll }) { Text(if (showAll) "Afficher moins" else "Tout afficher (${items.size})") }
-            OutlinedButton(onClick = { editing = CustomFood("") }) { Text("+ Ajouter un aliment") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { editing = CustomFood("") }) { Text("+ Ajouter un aliment") }
+                OutlinedButton(onClick = { onOpenRecipe(null) }) { Text("📋 Nouvelle recette") }
+            }
         }
     }
 
@@ -85,7 +89,7 @@ private fun MyFoodDialog(c: CustomFood, onDismiss: () -> Unit, onSave: (CustomFo
                 val c2 = parseNum(carbs)?.takeIf { it >= 0 }; val p2 = parseNum(prot)?.takeIf { it >= 0 }; val f2 = parseNum(fat)?.takeIf { it >= 0 }
                 val fi2 = parseNum(fiber)?.takeIf { it >= 0 && fiber.isNotBlank() }
                 val k = KcalLogic.fromMacros(c2, p2, f2, fi2) ?: parseNum(kcal)?.takeIf { it in 0.0..1000.0 }
-                onSave(CustomFood(name.trim(), k, c2, p2, f2, System.currentTimeMillis(), fi2))
+                onSave(CustomFood(name.trim(), k, c2, p2, f2, System.currentTimeMillis(), fi2, c.recipeSource, c.recipeJson, c.portionGrams))
             }) { Text("Enregistrer") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } })

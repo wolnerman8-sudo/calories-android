@@ -18,8 +18,8 @@ android {
         applicationId = "com.wolnerman.calories"
         minSdk = 24
         targetSdk = 34
-        versionCode = 30
-        versionName = "2.19"
+        versionCode = 31
+        versionName = "2.20"
         // Téléphones ARM uniquement (le moteur TFLite pèse ~3-6 Mo par architecture)
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }

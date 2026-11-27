@@ -77,8 +77,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private fun today(): String = LocalDate.now().toString()
-private fun nowTime(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+internal fun today(): String = LocalDate.now().toString()
+internal fun nowTime(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
 /** v2.4 : propriété locale déléguée vers un champ de FoodForm (le reste du formulaire garde sa syntaxe). */
 internal class FormField<T>(private val st: MutableState<FoodForm>, private val get: (FoodForm) -> T, private val set: (FoodForm, T) -> FoodForm) {
     operator fun getValue(thisRef: Any?, p: kotlin.reflect.KProperty<*>): T = get(st.value)
@@ -107,6 +107,8 @@ fun CaloriesApp(storage: Storage) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showGoalDialog by remember { mutableStateOf(false) }
     var toDelete by remember { mutableStateOf<Entry?>(null) }
+    var showRecipe by remember { mutableStateOf(false) }
+    var recipeEdit by remember { mutableStateOf<CustomFood?>(null) }
     val profile = storage.loadProfile()
     val outcome = EnergyLogic.plan(EnergyLogic.compute(profile), plan, profile.male)
     val goal = outcome.kcal
@@ -145,6 +147,18 @@ fun CaloriesApp(storage: Storage) {
         }
     }
 
+    if (showRecipe) {
+        RecipeScreen(
+            initial = recipeEdit,
+            onClose = { showRecipe = false; recipeEdit = null },
+            onAddToJournal = { e ->
+                update(entries + e); syncHealth(added = listOf(e))
+                showRecipe = false; recipeEdit = null
+            },
+        )
+        return
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -174,11 +188,13 @@ fun CaloriesApp(storage: Storage) {
         Box(Modifier.padding(pad).fillMaxSize()) {
             if (tab == 0) TodayScreen(entries, outcome, supplements, supplementLogs,
                 onPlanChange = { setPlan(it) },
-                onAdd = { update(entries + it); syncHealth(added = listOf(it)) }, onDelete = { toDelete = it })
+                onAdd = { update(entries + it); syncHealth(added = listOf(it)) }, onDelete = { toDelete = it },
+                onOpenRecipe = { showRecipe = true; recipeEdit = null })
             else if (tab == 1) HistoryScreen(entries, goal, supplements, supplementLogs, onDelete = { toDelete = it })
             else if (tab == 4) ChartsScreen(entries, goal, suppKcalByDay)
             else if (tab == 3) NutrientsScreen(entries, goal, profile.male)
-            else ProfileScreen(storage, outcome, entries, supplements, supplementLogs, onPlanChange = { setPlan(it) })
+            else ProfileScreen(storage, outcome, entries, supplements, supplementLogs, onPlanChange = { setPlan(it) },
+                onOpenRecipe = { c -> showRecipe = true; recipeEdit = c })
         }
     }
 
@@ -206,6 +222,7 @@ fun TodayScreen(
     onPlanChange: (GoalPlan) -> Unit,
     onAdd: (Entry) -> Unit,
     onDelete: (Entry) -> Unit,
+    onOpenRecipe: () -> Unit = {},
 ) {
     val todayStr = today()
     val todays = entries.filter { it.date == todayStr }.sortedByDescending { it.id }
@@ -224,6 +241,11 @@ fun TodayScreen(
         item { SummaryCard(total, outcome, macros, targets, onPlanChange, suppKcal) }
         item { SupplementsTodayCard(todayStr) }
         item { ProteinDistributionHint(proteinGoal) { p -> onAdd(ProteinLogic.wheyEntry(p, System.currentTimeMillis(), today(), nowTime())) } }
+        item {
+            OutlinedButton(onClick = onOpenRecipe, modifier = Modifier.fillMaxWidth()) {
+                Text("📋 Recette — coller une liste d'ingrédients")
+            }
+        }
         item { AddEntryCard(onAdd) }
         if (todays.isNotEmpty()) item { Text("Repas du jour", style = MaterialTheme.typography.titleMedium) }
         else item { Text("Aucun aliment ajouté aujourd'hui.", color = Color.Gray) }
@@ -736,6 +758,7 @@ fun ProfileScreen(
     supplements: List<Supplement> = emptyList(),
     supplementLogs: Map<String, Set<Long>> = emptyMap(),
     onPlanChange: (GoalPlan) -> Unit,
+    onOpenRecipe: (CustomFood?) -> Unit = {},
 ) {
     val initial = remember { storage.loadProfile() }
     var age by remember { mutableStateOf(initial.age?.toString() ?: "") }
@@ -851,7 +874,7 @@ fun ProfileScreen(
             CompositionGuideCard(age = profile.age, fat = lastComp?.fatPct, muscle = lastComp?.musclePct,
                 measuredAt = lastComp?.timeMs)
         }
-        item { MyFoodsCard() }
+        item { MyFoodsCard(onOpenRecipe) }
         item { RecognitionSettingsCard() }
         item { AppVersionText(Modifier.padding(top = 4.dp)) }
         item {

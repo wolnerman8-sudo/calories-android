@@ -63,9 +63,11 @@ private val NUMBER_WORDS = mapOf("un" to 1.0, "une" to 1.0, "deux" to 2.0, "troi
     "six" to 6.0, "sept" to 7.0, "huit" to 8.0, "neuf" to 9.0, "dix" to 10.0, "douze" to 12.0, "demi" to 0.5, "demie" to 0.5)
 /** Unités de masse / volume → grammes (liquides : 1 ml ≈ 1 g). */
 private val MASS = mapOf("g" to 1.0, "gr" to 1.0, "gramme" to 1.0, "grammes" to 1.0, "kg" to 1000.0, "kilo" to 1000.0, "kilos" to 1000.0,
-    "ml" to 1.0, "cl" to 10.0, "dl" to 100.0, "l" to 1000.0, "litre" to 1000.0, "litres" to 1000.0)
+    "mg" to 0.001, "ml" to 1.0, "cl" to 10.0, "dl" to 100.0, "l" to 1000.0, "litre" to 1000.0, "litres" to 1000.0)
 /** Mesures ménagères au poids fixe (sauf si l'aliment a cette unité comme unité propre). */
 private val MEASURES = listOf(
+    Regex("^c\\.?(a|à)\\.?s\\b") to ("c. à soupe" to 15.0),  // c.à.s / c.a.s
+    Regex("^c\\.?(a|à)\\.?c\\b") to ("c. à café" to 5.0),    // c.à.c / c.a.c
     Regex("^(cuilleres?|cuillers?|c\\.?) ?(a|à)? ?(soupe|s\\.?)\\b|^cs\\b|^cas\\b") to ("c. à soupe" to 15.0),
     Regex("^(cuilleres?|cuillers?|c\\.?) ?(a|à)? ?(cafe|c\\.?)\\b|^cc\\b|^cac\\b") to ("c. à café" to 5.0),
     Regex("^verres?\\b") to ("verre" to 200.0),
@@ -73,13 +75,24 @@ private val MEASURES = listOf(
     Regex("^bols?\\b") to ("bol" to 250.0),
     Regex("^canettes?\\b") to ("canette" to 330.0),
     Regex("^poignees?\\b") to ("poignée" to 30.0),
+    Regex("^pincees?\\b") to ("pincée" to 0.5),  // estimation cuisine, pas Ciqual
 )
 /** Mots d'unité « comptable » : le poids vient de l'aliment (tranche de pain = 30 g, part de pizza = 120 g…). */
 private val COUNT_WORDS = Regex("^(tranches?|parts?|portions?|morceaux?|pieces?|unites?|pots?|boules?|carres?|assiettes?|filets?|steaks?|cuisses?|barres?|sachets?|paquets?|rondelles?|gousses?|feuilles?|fruits?|bouteilles?|coupes?|x)\\b")
 
+/** ½, ¼… → fractions ASCII, pour « ½ banane » ou « 1½ ». */
+internal fun expandUnicodeFractions(input: String): String {
+    var s = input
+    s = s.replace(Regex("""(\d)\s*½"""), "$1 1/2")
+    s = s.replace(Regex("""(\d)\s*¼"""), "$1 1/4")
+    s = s.replace(Regex("""(\d)\s*¾"""), "$1 3/4")
+    s = s.replace(Regex("""(\d)\s*⅓"""), "$1 1/3")
+    s = s.replace(Regex("""(\d)\s*⅔"""), "$1 2/3")
+    return s.replace("½", "1/2").replace("¼", "1/4").replace("¾", "3/4").replace("⅓", "1/3").replace("⅔", "2/3")
+}
+
 fun parseQuantity(input: String): QtyParse {
-    var s = fold(input).replace('½', ' ').trim()
-    if (input.contains('½')) s = "0.5 " + s
+    var s = fold(expandUnicodeFractions(input)).trim()
     var count: Double? = null
     var grams: Double? = null
     // nombre : « 2 », « 2,5 », « 1/2 », « 1 1/2 » ou en lettres

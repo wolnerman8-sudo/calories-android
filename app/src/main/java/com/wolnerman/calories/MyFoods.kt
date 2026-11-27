@@ -17,6 +17,9 @@ data class CustomFood(
     val fat: Double? = null,
     val updatedMs: Long = 0,
     val fiber: Double? = null,   // v2.10 : fibres g/100 g (G = glucides totaux, fibres comprises)
+    val recipeSource: String? = null,  // v2.20 : texte d'origine de la recette
+    val recipeJson: String? = null,    // lignes (corrections, valeurs manuelles) + portions
+    val portionGrams: Double? = null,  // poids d'une portion
 )
 
 object MyFoodsLogic {
@@ -24,12 +27,15 @@ object MyFoodsLogic {
 
     fun key(name: String) = fold(name).replace(Regex("\\s+"), " ").trim()
 
+    fun isRecipe(c: CustomFood) = !c.recipeSource.isNullOrBlank() || !c.recipeJson.isNullOrBlank()
+
     /** Ajoute ou met à jour (même nom, sans tenir compte des majuscules / accents). Valeurs absentes = gardées. */
     fun upsert(list: List<CustomFood>, c: CustomFood): List<CustomFood> {
         val name = c.name.trim(); if (name.isEmpty()) return list
         val old = list.firstOrNull { key(it.name) == key(name) }
         val merged = if (old == null) c.copy(name = name) else CustomFood(name,
-            c.kcal100 ?: old.kcal100, c.carbs ?: old.carbs, c.proteins ?: old.proteins, c.fat ?: old.fat, c.updatedMs, c.fiber ?: old.fiber)
+            c.kcal100 ?: old.kcal100, c.carbs ?: old.carbs, c.proteins ?: old.proteins, c.fat ?: old.fat, c.updatedMs, c.fiber ?: old.fiber,
+            c.recipeSource ?: old.recipeSource, c.recipeJson ?: old.recipeJson, c.portionGrams ?: old.portionGrams)
         return listOf(merged) + list.filter { key(it.name) != key(name) }
     }
 
@@ -41,7 +47,9 @@ object MyFoodsLogic {
 
     /** Conversion pour la recherche : kcal inconnues → -1 (le formulaire laisse alors le champ vide). */
     fun toFood(c: CustomFood) = Food(c.name, c.kcal100?.roundToInt() ?: -1, c.carbs, c.proteins, c.fat,
-        nutrients = c.fiber?.let { mapOf("fiber" to it) } ?: emptyMap(), category = CATEGORY, source = CATEGORY)
+        nutrients = c.fiber?.let { mapOf("fiber" to it) } ?: emptyMap(),
+        unitGrams = c.portionGrams, unitLabel = c.portionGrams?.let { "portion" },
+        category = CATEGORY, source = CATEGORY)
 
     fun isMine(f: Food) = f.category == CATEGORY
 
@@ -51,13 +59,18 @@ object MyFoodsLogic {
 
     fun toJson(l: List<CustomFood>): String = JSONArray().also { a ->
         l.forEach { c -> a.put(JSONObject().put("n", c.name).put("t", c.updatedMs).apply {
-            c.kcal100?.let { put("k", it) }; c.carbs?.let { put("c", it) }; c.proteins?.let { put("p", it) }; c.fat?.let { put("f", it) }; c.fiber?.let { put("fi", it) } }) }
+            c.kcal100?.let { put("k", it) }; c.carbs?.let { put("c", it) }; c.proteins?.let { put("p", it) }; c.fat?.let { put("f", it) }; c.fiber?.let { put("fi", it) }
+            c.recipeSource?.takeIf { it.isNotBlank() }?.let { put("rs", it) }
+            c.recipeJson?.takeIf { it.isNotBlank() }?.let { put("rj", it) }
+            c.portionGrams?.let { put("pg", it) }
+        }) }
     }.toString()
 
     fun fromJson(s: String?): List<CustomFood> = runCatching {
         val a = JSONArray(s ?: "[]")
         fun JSONObject.d(k: String) = if (has(k)) optDouble(k).takeIf { !it.isNaN() } else null
-        (0 until a.length()).map { i -> a.getJSONObject(i).let { o -> CustomFood(o.getString("n"), o.d("k"), o.d("c"), o.d("p"), o.d("f"), o.optLong("t"), o.d("fi")) } }
+        (0 until a.length()).map { i -> a.getJSONObject(i).let { o -> CustomFood(o.getString("n"), o.d("k"), o.d("c"), o.d("p"), o.d("f"), o.optLong("t"), o.d("fi"),
+            o.optString("rs").takeIf { it.isNotBlank() }, o.optString("rj").takeIf { it.isNotBlank() }, o.d("pg")) } }
     }.getOrDefault(emptyList())
 }
 

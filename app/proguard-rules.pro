@@ -11,3 +11,9 @@
 -keep class org.tensorflow.lite.** { *; }
 -dontwarn org.tensorflow.lite.**
 -dontwarn com.google.ai.edge.litert.**
+
+# ML Kit Text Recognition (OCR étiquette, modèle embarqué)
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_** { *; }
+-dontwarn com.google.mlkit.**
+-dontwarn com.google.android.gms.internal.mlkit_**

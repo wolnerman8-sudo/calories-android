@@ -18,8 +18,8 @@ android {
         applicationId = "com.wolnerman.calories"
         minSdk = 24
         targetSdk = 34
-        versionCode = 31
-        versionName = "2.20"
+        versionCode = 32
+        versionName = "2.21"
         // Téléphones ARM uniquement (le moteur TFLite pèse ~3-6 Mo par architecture)
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
@@ -73,6 +73,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    // OCR étiquette (latin), modèle embarqué : fonctionne hors-ligne, sans Play services ni clé API
+    implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     // Santé Connect : 1.1.0-alpha07 = dernière version compatible compileSdk 34 / AGP 8.5 (les suivantes exigent SDK 35-36)

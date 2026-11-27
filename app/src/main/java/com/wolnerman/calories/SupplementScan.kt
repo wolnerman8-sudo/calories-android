@@ -22,7 +22,7 @@ data class ScannedSupplementDraft(
 
 /** Analyse (sans réseau) et recherche d'un complément par code-barres : Open Food Facts, puis Open Products / Beauty Facts. */
 object SupplementScanLogic {
-    const val UNRECOGNIZED = "Produit non reconnu : saisis le nom et la dose"
+    const val UNRECOGNIZED = "Produit non reconnu : prends l'étiquette en photo pour préremplir, ou saisis le nom et la dose."
     private const val UA = "Calories-Android/2.18 (wolnerman)"
     private val HOSTS = listOf(
         "https://world.openfoodfacts.org" to "Open Food Facts",
@@ -32,7 +32,7 @@ object SupplementScanLogic {
     private const val FIELDS =
         "product_name,product_name_fr,generic_name,generic_name_fr,brands,nutriments,serving_size,quantity"
 
-    private val COUNTABLE = listOf(
+    internal val COUNTABLE = listOf(
         "gélules" to "gélule", "gelules" to "gélule", "gelule" to "gélule", "gélule" to "gélule",
         "capsules" to "capsule", "capsule" to "capsule",
         "comprimés" to "comprimé", "comprimes" to "comprimé", "comprimé" to "comprimé", "comprime" to "comprimé",

@@ -388,6 +388,10 @@ private fun SupplementEditDialog(
     var photoBusy by remember { mutableStateOf(false) }
     var pendingCameraPath by rememberSaveable { mutableStateOf<String?>(null) }
     var startedPhoto by remember(formKey) { mutableStateOf(false) }
+    var ocrBusy by remember { mutableStateOf(false) }
+    var ocrRaw by remember(formKey) { mutableStateOf<String?>(null) }
+    var ocrCandidates by remember(formKey) { mutableStateOf<List<String>>(emptyList()) }
+    var showOcrText by remember { mutableStateOf(false) }
 
     val canSave = SupplementFormLogic.canSave(name)
     val blockedReason = SupplementFormLogic.blockedReason(name)
@@ -456,6 +460,33 @@ private fun SupplementEditDialog(
         }
     }
 
+    fun runOcr(force: Boolean = false) {
+        val path = photoPath ?: return
+        if (ocrBusy || photoBusy) return
+        if (!force && name.isNotBlank() && dose.isNotBlank()) return
+        ocrBusy = true
+        testMsg = "Lecture de l'étiquette…"
+        scope.launch {
+            val extraction = LabelOcr.extract(ctx, path)
+            val fill = LabelOcrLogic.applyToForm(name, dose, kcalText, omegaText, omegaInGrams, extraction)
+            name = fill.name
+            dose = fill.dose
+            kcalText = fill.kcalText
+            omegaText = fill.omegaText
+            omegaInGrams = fill.omegaInGrams
+            ocrRaw = fill.rawText.takeIf { it.isNotBlank() }
+            ocrCandidates = fill.candidates
+            testMsg = fill.message
+            if (fill.usable) showOcrText = false
+            ocrBusy = false
+        }
+    }
+
+    LaunchedEffect(photoPath) {
+        val path = photoPath
+        if (path != null && File(path).exists() && (name.isBlank() || dose.isBlank())) runOcr(force = false)
+    }
+
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (!ok) {
             reminderEnabled = false
@@ -509,18 +540,33 @@ private fun SupplementEditDialog(
                                     scanning = true
                                     testMsg = "Recherche du produit…"
                                     scope.launch {
-                                        val draft = SupplementScanLogic.lookup(code)
-                                        applyDraft(draft)
+                                        val known = SupplementScanLogic.findByBarcode(Supplements.items, code)
+                                            ?.takeIf { it.id != initial.id }
+                                        if (known != null) {
+                                            barcode = known.barcode ?: SupplementScanLogic.normalizeBarcode(code) ?: code
+                                            if (name.isBlank()) name = known.name
+                                            if (dose.isBlank()) dose = known.dose
+                                            if (kcalText.isBlank()) known.kcal?.let { kcalText = it.toString() }
+                                            if (omegaText.isBlank()) known.omega3Mg?.let { mg ->
+                                                val grams = mg >= 1000.0 && mg % 1000.0 == 0.0
+                                                omegaInGrams = grams
+                                                omegaText = fmt(if (grams) mg / 1000.0 else mg)
+                                            }
+                                            testMsg = "Complément déjà enregistré (« ${known.name} »). Les champs vides ont été repris."
+                                        } else {
+                                            val draft = SupplementScanLogic.lookup(code)
+                                            applyDraft(draft)
+                                        }
                                         scanning = false
                                     }
                                 }, onError = { testMsg = it })
                             },
-                            enabled = !scanning && !photoBusy,
+                            enabled = !scanning && !photoBusy && !ocrBusy,
                             modifier = Modifier.weight(1f),
                         ) { Text(if (scanning) "Recherche…" else "📷 Scanner") }
                         OutlinedButton(
                             onClick = { launchCamera() },
-                            enabled = !scanning && !photoBusy,
+                            enabled = !scanning && !photoBusy && !ocrBusy,
                             modifier = Modifier.weight(1f),
                         ) { Text(if (photoBusy) "Photo…" else "📷 Photo") }
                     }
@@ -537,7 +583,31 @@ private fun SupplementEditDialog(
                     photoPath?.takeIf { File(it).exists() }?.let { path ->
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Thumbnail(path, 88)
-                            TextButton(onClick = { setPhoto(null) }) { Text("Retirer la photo") }
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                                TextButton(
+                                    onClick = { runOcr(force = true) },
+                                    enabled = !ocrBusy && !photoBusy && !scanning,
+                                ) { Text(if (ocrBusy) "Lecture…" else "🔍 Lire l'étiquette") }
+                                TextButton(onClick = { setPhoto(null); ocrRaw = null; ocrCandidates = emptyList() }) { Text("Retirer la photo") }
+                            }
+                        }
+                    }
+                    if (ocrCandidates.isNotEmpty()) {
+                        Text("Autre ligne comme nom :", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        ocrCandidates.take(6).forEach { cand ->
+                            Text(
+                                cand,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.fillMaxWidth().clickable { name = cand }.padding(vertical = 4.dp),
+                            )
+                        }
+                    }
+                    ocrRaw?.let { raw ->
+                        TextButton(onClick = { showOcrText = !showOcrText }) {
+                            Text(if (showOcrText) "Masquer le texte lu" else "Voir le texte lu sur l'étiquette")
+                        }
+                        if (showOcrText) {
+                            Text(raw, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                         }
                     }
 
